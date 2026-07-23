@@ -9,7 +9,10 @@ description = "RAG tooling for Ollama"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Yucheng" }]
-dependencies = ["ollama==0.6.2"]
+dependencies = [
+"ollama==0.6.2",
+"sec-edgar-downloader==5.1.0"
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ollama_rag"]
