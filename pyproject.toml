@@ -10,11 +10,12 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Yucheng" }]
 dependencies = [
-"ollama==0.6.2",
-"edgartools==5.43.0",
-"fastapi==0.140.0",
-"polars==1.43.1",
-"requests==2.34.2"
+    "ollama==0.6.2",
+    "edgartools==5.43.0",
+    "fastapi==0.140.0",
+    "polars==1.43.1",
+    "requests==2.34.2",
+    "sqlalchemy>=2.0.51",
 ]
 
 [dependency-groups]

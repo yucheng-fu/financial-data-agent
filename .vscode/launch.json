@@ -5,11 +5,28 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Current File",
+            "name": "Python Debugger: Filings Backfill",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
+            "module": "ollama_rag.backend.filings",
+            "console": "integratedTerminal",
+            "args": [
+                "--start-year",
+                "2022",
+                "--end-year",
+                "2025",
+                "--quarters",
+                "1",
+                "2",
+                "3",
+                "4",
+                "--limit",
+                "5",
+                "--max-period-workers",
+                "4",
+                "--max-symbol-workers",
+                "5"
+            ]
         }
     ]
 }
