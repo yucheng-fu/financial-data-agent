@@ -3,9 +3,9 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ollama-rag"
+name = "financial-data-agent"
 version = "0.1.0"
-description = "RAG tooling for Ollama"
+description = "Financial data agent for SEC and market data workflows"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Yucheng" }]
@@ -33,7 +33,7 @@ quotes = "double"
 indent-size = "space"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ollama_rag"]
+packages = ["src/financial_data_agent"]
 
 [tool.hatch.build.targets.sdist]
 include = [

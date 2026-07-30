@@ -732,7 +732,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ollama-rag"
+name = "financial-data-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

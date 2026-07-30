@@ -10,7 +10,7 @@ When asked to update the code repository structure, only include the folders, do
 .
 ├── data/ - Stored artifacts such as downloaded filings and generated datasets.
 └── src/ - Python source code for the application package.
-    └── ollama_rag/ - Main package namespace for Ollama RAG functionality.
+    └── financial_data_agent/ - Main package namespace for financial data agent functionality.
         ├── api/ - API layer and request/response handling.
         └── backend/ - Backend fetchers and data acquisition helpers.
 ```

@@ -4,12 +4,12 @@ from pathlib import Path
 import pandas as pd
 import polars as pl
 import requests
-from ollama_rag.constants import SANDP500_WIKI_URL
+from financial_data_agent.constants import SP500_WIKI_URL
 
 
-class SANDP500Fetcher:
+class SP500Fetcher:
     def __init__(self) -> None:
-        self.url = SANDP500_WIKI_URL
+        self.url = SP500_WIKI_URL
         self.headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -30,6 +30,6 @@ class SANDP500Fetcher:
 
 
 if __name__ == "__main__":
-    fetcher = SANDP500Fetcher()
+    fetcher = SP500Fetcher()
     df = fetcher.fetch()
     print(df)
