@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import polars as pl
 import requests
+
 from financial_data_agent.constants import SP500_WIKI_URL
 
 

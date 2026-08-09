@@ -1,8 +1,8 @@
-from pathlib import Path
-from datetime import date
 import argparse
-from time import sleep
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date
+from pathlib import Path
+from time import sleep
 
 import polars as pl
 from edgar import Company, set_identity
@@ -62,9 +62,7 @@ class FilingsFetcher:
                 company = Company(ticker.upper())
                 filings = company.get_filings(form="10-Q", year=year, quarter=quarter)
                 if not filings:
-                    raise ValueError(
-                        f"No 10-Q filing found for {ticker.upper()} in {year} Q{quarter}"
-                    )
+                    raise ValueError(f"No 10-Q filing found for {ticker.upper()} in {year} Q{quarter}")
 
                 filing = filings[0]
                 target_dir = (
@@ -101,9 +99,7 @@ class FilingsFetcher:
 class FilingsBackfillRunner:
     """Read S&P 500 tickers from parquet files and fetch recent 10-Q filings."""
 
-    def __init__(
-        self, data_dir: Path | str = "data", fetcher: FilingsFetcher | None = None
-    ) -> None:
+    def __init__(self, data_dir: Path | str = "data", fetcher: FilingsFetcher | None = None) -> None:
         """Initialize the runner.
 
         Args:
@@ -126,9 +122,7 @@ class FilingsBackfillRunner:
             frame = pl.read_parquet(parquet_file)
             if "Symbol" not in frame.columns:
                 continue
-            symbols.extend(
-                frame.get_column("Symbol").drop_nulls().cast(pl.Utf8).to_list()
-            )
+            symbols.extend(frame.get_column("Symbol").drop_nulls().cast(pl.Utf8).to_list())
         return symbols
 
     def run(
@@ -243,11 +237,7 @@ def main() -> None:
         print(f"No parquet files with a Symbol column were found in {runner.data_dir}")
         raise SystemExit(1)
 
-    periods = [
-        (year, quarter)
-        for year in range(args.start_year, args.end_year + 1)
-        for quarter in quarters
-    ]
+    periods = [(year, quarter) for year in range(args.start_year, args.end_year + 1) for quarter in quarters]
     results = run_periods(
         runner,
         periods,
@@ -255,9 +245,7 @@ def main() -> None:
         max_workers=args.max_period_workers,
     )
 
-    for year, quarter, downloaded_paths, failures in sorted(
-        results, key=lambda item: (item[0], item[1])
-    ):
+    for year, quarter, downloaded_paths, failures in sorted(results, key=lambda item: (item[0], item[1])):
         for path in downloaded_paths:
             print(path)
         for symbol, error in failures:

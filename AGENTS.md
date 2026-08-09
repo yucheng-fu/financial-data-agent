@@ -9,10 +9,12 @@ When asked to update the code repository structure, only include the folders, do
 ```text
 .
 ├── data/ - Stored artifacts such as downloaded filings and generated datasets.
+├── docs/ - Project documentation and reference material.
 └── src/ - Python source code for the application package.
     └── financial_data_agent/ - Main package namespace for financial data agent functionality.
         ├── api/ - API layer and request/response handling.
-        └── backend/ - Backend fetchers and data acquisition helpers.
+        ├── db/ - Database models, migrations, and persistence helpers.
+        └── ingestion/ - Data ingestion and acquisition workflows.
 ```
 
 
