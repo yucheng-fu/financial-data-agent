@@ -24,15 +24,18 @@ flowchart TD
         fastapi["FastAPI Backend"]
     end
 
-    subgraph QueryPipeline["Query Processing Pipeline"]
+    subgraph QueryPipeline["Agent / Query Processing"]
         orchestrator["Agent Orchestrator"]
-        sql_agent["SQL Agent"]
-        rag_agent["RAG Agent"]
+
+        sql_tool["SQL Tool"]
+        rag_tool["RAG Tool"]
+        retrieval_tool["SEC acquisition Tool"]
+
         synthesizer["Large Language Model"]
     end
 
-    subgraph IngestionPipeline["Data Ingestion Pipeline (Offline/Batch)"]
-        docs["Earnings Reports (Documents)"]
+    subgraph IngestionPipeline["Data Ingestion Pipeline"]
+        docs["Earnings Reports / SEC Filings"]
         extractor["Structured Data Extractor"]
         chunker["Text Chunker & Embedder"]
     end
@@ -42,25 +45,66 @@ flowchart TD
         pgvector[("pgvector\n(Document Embeddings)")]
     end
 
-    %% Ingestion Flow
-    docs -->|Extract Tables / Financials| extractor -->|Insert Rows| postgres
-    docs -->|Chunk & Embed Text| chunker -->|Store Embeddings| pgvector
+    %% =========================================================
+    %% DATA INGESTION
+    %% =========================================================
 
-    %% Request / Response Flow
+    docs -->|Extract Tables / Financials| extractor
+    extractor -->|Insert Rows| postgres
+
+    docs -->|Chunk & Embed Text| chunker
+    chunker -->|Store Embeddings| pgvector
+
+    %% =========================================================
+    %% REQUEST / RESPONSE FLOW
+    %% =========================================================
+
     user -->|1. Natural Language Question| fastapi
     fastapi -->|2. Route Query| orchestrator
 
-    orchestrator -->|3a. Structured Query| sql_agent
-    orchestrator -->|3b. Semantic Search| rag_agent
+    %% =========================================================
+    %% AGENT TOOL SELECTION
+    %% =========================================================
 
-    sql_agent -->|4a. Execute SQL| postgres
-    postgres -->|5a. Return Rows / Financials| sql_agent
+    orchestrator -->|3a. Structured Query| sql_tool
+    orchestrator -->|3b. Document / Semantic Query| rag_tool
+    orchestrator -->|3c. Missing Data / Filing Required| retrieval_tool
 
-    rag_agent -->|4b. Similarity Search| pgvector
-    pgvector -->|5b. Return Top-K Chunks| rag_agent
+    %% =========================================================
+    %% SQL TOOL
+    %% =========================================================
 
-    sql_agent -->|6a. Structured Context| synthesizer
-    rag_agent -->|6b. Unstructured Context| synthesizer
+    sql_tool -->|4a. Execute SQL| postgres
+    postgres -->|5a. Return Rows / Financials| sql_tool
+
+    %% =========================================================
+    %% RAG TOOL
+    %% =========================================================
+
+    rag_tool -->|4b. Retrieve Relevant Chunks| pgvector
+    pgvector -->|5b. Return Top-K Chunks| rag_tool
+
+    %% =========================================================
+    %% SEC ACQUISITION TOOL
+    %% =========================================================
+
+    retrieval_tool -->|4c. Fetch Earnings Reports / Filings| docs
+
+    %% Retrieval populates the database
+    retrieval_tool -->|Trigger Ingestion| extractor
+    retrieval_tool -->|Trigger Chunking / Embedding| chunker
+
+    %% =========================================================
+    %% TOOL RESULTS → SYNTHESIS
+    %% =========================================================
+
+    sql_tool -->|6a. Structured Evidence| synthesizer
+    rag_tool -->|6b. Document Evidence| synthesizer
+    retrieval_tool -->|6c. Newly Retrieved Data| synthesizer
+
+    %% =========================================================
+    %% RESPONSE
+    %% =========================================================
 
     synthesizer -->|7. Final Response| fastapi
     fastapi -->|8. HTTP Response| user

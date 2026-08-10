@@ -3,17 +3,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from financial_data_agent.db.models.base import Base
+from financial_data_agent.db.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from financial_data_agent.db.models.chunk import Chunk
     from financial_data_agent.db.models.company import Company
+    from financial_data_agent.db.models.financial_metric import FinancialMetric
 
 
-class Document(Base):
+class Document(TimestampMixin, Base):
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -37,12 +37,12 @@ class Document(Base):
         Text,
     )
 
-    published_at: Mapped[datetime | None]
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     company: Mapped[Company] = relationship(
         back_populates="documents",
     )
 
-    chunks: Mapped[list[Chunk]] = relationship(
+    financial_metrics: Mapped[list[FinancialMetric]] = relationship(
         back_populates="document",
     )
