@@ -1,6 +1,6 @@
 # PostGreSQL Database
 
-### Start database
+### Start Postgres
 Run database locally in Docker container
 ```bash
 docker compose up -d
@@ -11,9 +11,9 @@ Verify it is running
 docker compose ps -a
 ```
 
-### Create table
+### Stop Postgres
 ```bash
-createdb -U postgres -h localhost financial_data_agent
+docker compose down -v
 ```
 
 ### Migrations
