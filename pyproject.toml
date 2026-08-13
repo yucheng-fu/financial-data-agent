@@ -13,6 +13,7 @@ dependencies = [
     "ollama==0.6.2",
     "edgartools==5.43.0",
     "fastapi[standard]==0.140.0",
+    "python-dotenv>=1.0.1",
     "polars==1.42.1",
     "requests==2.34.2",
     "sqlalchemy>=2.0.51",

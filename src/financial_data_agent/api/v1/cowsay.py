@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
-router = APIRouter()
+router = APIRouter(tags=["Cowsay"])
 
 
 @router.get("/cow", response_class=PlainTextResponse)

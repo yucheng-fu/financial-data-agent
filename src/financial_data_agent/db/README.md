@@ -6,6 +6,11 @@ Run database locally in Docker container
 docker compose up -d
 ```
 
+Verify it is running
+```bash
+docker compose ps -a
+```
+
 ### Create table
 ```bash
 createdb -U postgres -h localhost financial_data_agent

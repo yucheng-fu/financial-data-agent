@@ -9,7 +9,6 @@ from edgar import Company, set_identity
 
 
 def parse_quarters(raw_quarters: list[str]) -> list[int]:
-    """Parse quarters from command-line input."""
     quarters: list[int] = []
     for value in raw_quarters:
         quarters.extend(int(part) for part in value.split(",") if part)
@@ -62,7 +61,9 @@ class FilingsFetcher:
                 company = Company(ticker.upper())
                 filings = company.get_filings(form="10-Q", year=year, quarter=quarter)
                 if not filings:
-                    raise ValueError(f"No 10-Q filing found for {ticker.upper()} in {year} Q{quarter}")
+                    raise ValueError(
+                        f"No 10-Q filing found for {ticker.upper()} in {year} Q{quarter}"
+                    )
 
                 filing = filings[0]
                 target_dir = (
@@ -99,7 +100,9 @@ class FilingsFetcher:
 class FilingsBackfillRunner:
     """Read S&P 500 tickers from parquet files and fetch recent 10-Q filings."""
 
-    def __init__(self, data_dir: Path | str = "data", fetcher: FilingsFetcher | None = None) -> None:
+    def __init__(
+        self, data_dir: Path | str = "data", fetcher: FilingsFetcher | None = None
+    ) -> None:
         """Initialize the runner.
 
         Args:
@@ -122,7 +125,9 @@ class FilingsBackfillRunner:
             frame = pl.read_parquet(parquet_file)
             if "Symbol" not in frame.columns:
                 continue
-            symbols.extend(frame.get_column("Symbol").drop_nulls().cast(pl.Utf8).to_list())
+            symbols.extend(
+                frame.get_column("Symbol").drop_nulls().cast(pl.Utf8).to_list()
+            )
         return symbols
 
     def run(
@@ -206,16 +211,27 @@ def run_periods(
 
 def main() -> None:
     """Run the filings backfill workflow."""
-    parser = argparse.ArgumentParser(description="Backfill SEC 10-Q filings from parquet tickers.")
-    parser.add_argument("--start-year", type=int, default=2022, help="Start year to process.")
-    parser.add_argument("--end-year", type=int, default=2025, help="End year to process.")
+    parser = argparse.ArgumentParser(
+        description="Backfill SEC 10-Q filings from parquet tickers."
+    )
+    parser.add_argument(
+        "--start-year", type=int, default=2022, help="Start year to process."
+    )
+    parser.add_argument(
+        "--end-year", type=int, default=2025, help="End year to process."
+    )
     parser.add_argument(
         "--quarters",
         nargs="+",
         default=["1", "2", "3", "4"],
         help="Quarter numbers to process.",
     )
-    parser.add_argument("--limit", type=int, default=5, help="Number of companies to process per period.")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Number of companies to process per period.",
+    )
     parser.add_argument(
         "--max-period-workers",
         type=int,
@@ -237,7 +253,11 @@ def main() -> None:
         print(f"No parquet files with a Symbol column were found in {runner.data_dir}")
         raise SystemExit(1)
 
-    periods = [(year, quarter) for year in range(args.start_year, args.end_year + 1) for quarter in quarters]
+    periods = [
+        (year, quarter)
+        for year in range(args.start_year, args.end_year + 1)
+        for quarter in quarters
+    ]
     results = run_periods(
         runner,
         periods,
@@ -245,7 +265,9 @@ def main() -> None:
         max_workers=args.max_period_workers,
     )
 
-    for year, quarter, downloaded_paths, failures in sorted(results, key=lambda item: (item[0], item[1])):
+    for year, quarter, downloaded_paths, failures in sorted(
+        results, key=lambda item: (item[0], item[1])
+    ):
         for path in downloaded_paths:
             print(path)
         for symbol, error in failures:
