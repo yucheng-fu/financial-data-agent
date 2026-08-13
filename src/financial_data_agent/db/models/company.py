@@ -21,6 +21,6 @@ class Company(TimestampMixin, Base):
     gics_sector: Mapped[str | None] = mapped_column(String(255))
     gics_sub_industry: Mapped[str | None] = mapped_column(String(255))
     date_added: Mapped[date | None] = mapped_column(Date())
-    CIK: Mapped[str | None] = mapped_column(String(255))
+    CIK: Mapped[str] = mapped_column(String(255))
 
     documents: Mapped[list[Document]] = relationship(back_populates="company")
