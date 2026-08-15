@@ -51,7 +51,7 @@ def _row_to_company_dto(row: dict[str, object]) -> CompanyDTO:
     )
 
 
-@router.post("/companies/sp500/import")
+@router.post("/companies/sp500/import", summary="Import all S&P 500 companies")
 def import_sp500_companies(session: Session = Depends(get_session)) -> dict[str, int]:
     """Fetch the current S&P 500 table from Wikipedia and sync it into the database."""
     fetcher = SP500Fetcher()
@@ -81,7 +81,9 @@ def import_sp500_companies(session: Session = Depends(get_session)) -> dict[str,
     return {"created": created, "updated": updated, "total": created + updated}
 
 
-@router.post("/companies/sp500/import/{ticker}")
+@router.post(
+    "/companies/sp500/import/{ticker}", summary="Import a single S&P 500 company"
+)
 def import_sp500_company(
     ticker: str,
     session: Session = Depends(get_session),

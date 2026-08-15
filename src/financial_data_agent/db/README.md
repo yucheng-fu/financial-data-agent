@@ -13,7 +13,7 @@ docker compose ps -a
 
 ### Stop Postgres
 ```bash
-docker compose down -v
+docker compose down
 ```
 
 ### Migrations
