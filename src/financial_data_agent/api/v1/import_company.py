@@ -6,6 +6,11 @@ import polars as pl
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from financial_data_agent.api.requests.companies import CompanyImportRequest
+from financial_data_agent.api.responses.companies import (
+    CompanyImportResponse,
+    CompanyImportSummaryResponse,
+)
 from financial_data_agent.db.DTO.company import CompanyDTO
 from financial_data_agent.db.database import get_session
 from financial_data_agent.db.repositories.company import CompanyRepository
@@ -52,7 +57,9 @@ def _row_to_company_dto(row: dict[str, object]) -> CompanyDTO:
 
 
 @router.post("/companies/sp500/import", summary="Import all S&P 500 companies")
-def import_sp500_companies(session: Session = Depends(get_session)) -> dict[str, int]:
+def import_sp500_companies(
+    session: Session = Depends(get_session),
+) -> CompanyImportSummaryResponse:
     """Fetch the current S&P 500 table from Wikipedia and sync it into the database."""
     fetcher = SP500Fetcher()
     frame = fetcher.fetch(save_parquet=True)
@@ -78,33 +85,38 @@ def import_sp500_companies(session: Session = Depends(get_session)) -> dict[str,
         repository.update(existing_company, company_dto)
         updated += 1
 
-    return {"created": created, "updated": updated, "total": created + updated}
+    return CompanyImportSummaryResponse(
+        created=created,
+        updated=updated,
+        total=created + updated,
+    )
 
 
 @router.post(
-    "/companies/sp500/import/{ticker}", summary="Import a single S&P 500 company"
+    "/companies/sp500/import/single", summary="Import a single S&P 500 company"
 )
 def import_sp500_company(
-    ticker: str,
+    request: CompanyImportRequest,
     session: Session = Depends(get_session),
-) -> dict[str, str]:
+) -> CompanyImportResponse:
     """Fetch a single S&P 500 company from Wikipedia and sync it into the database."""
     fetcher = SP500Fetcher()
     frame = fetcher.fetch(save_parquet=False)
     repository = CompanyRepository(session)
 
-    matches = frame.filter(pl.col("Symbol") == ticker.upper())
+    ticker = request.ticker.upper()
+    matches = frame.filter(pl.col("Symbol") == ticker)
     if matches.is_empty():
         raise HTTPException(
             status_code=404,
-            detail=f"Ticker {ticker.upper()} was not found in the S&P 500 table",
+            detail=f"Ticker {ticker} was not found in the S&P 500 table",
         )
 
     company_dto = _row_to_company_dto(matches.to_dicts()[0])
     if not company_dto.ticker or not company_dto.name:
         raise HTTPException(
             status_code=422,
-            detail=f"Ticker {ticker.upper()} could not be mapped to a company record",
+            detail=f"Ticker {ticker} could not be mapped to a company record",
         )
 
     existing_company = repository.get_by_ticker(company_dto.ticker)
@@ -115,4 +127,4 @@ def import_sp500_company(
         repository.update(existing_company, company_dto)
         action = "updated"
 
-    return {"ticker": company_dto.ticker, "status": action}
+    return CompanyImportResponse(ticker=company_dto.ticker, status=action)

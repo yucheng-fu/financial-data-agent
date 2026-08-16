@@ -15,13 +15,18 @@ def parse_quarters(raw_quarters: list[str]) -> list[int]:
     return quarters
 
 
+def _default_data_dir() -> Path:
+    """Return the repository-level data directory."""
+    return Path(__file__).resolve().parents[3] / "data"
+
+
 class FilingsFetcher:
-    """Fetch and persist SEC 10-Q filings."""
+    """Fetch and persist SEC filings."""
 
     def __init__(
         self,
         identity: str = "MyName my.email@domain.com",
-        data_dir: Path | str = "data",
+        data_dir: Path | str | None = None,
         max_retries: int = 3,
         retry_delay_seconds: float = 2.0,
     ) -> None:
@@ -34,20 +39,23 @@ class FilingsFetcher:
             retry_delay_seconds: Delay between retry attempts in seconds.
         """
         set_identity(identity)
-        self.data_dir = Path(data_dir)
+        self.data_dir = Path(data_dir) if data_dir is not None else _default_data_dir()
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
 
-    def fetch_10q(self, ticker: str, quarter: int, year: int) -> Path:
-        """Fetch a 10-Q filing and save it to disk.
+    def fetch_filing(
+        self, ticker: str, form: list[str], quarter: int, year: int
+    ) -> tuple[Path, object]:
+        """Fetch an SEC filing and save it to disk.
 
         Args:
             ticker: Public company ticker symbol.
+            form: SEC filing forms, such as ["10-Q", "10-K"].
             quarter: Calendar quarter, from 1 to 4.
             year: Filing year.
 
         Returns:
-            Path to the saved filing text file.
+            A tuple containing the saved filing markdown file path and the filing.
 
         Raises:
             ValueError: If quarter is outside the range 1 to 4 or no filing is found.
@@ -59,10 +67,12 @@ class FilingsFetcher:
         for attempt in range(1, self.max_retries + 1):
             try:
                 company = Company(ticker.upper())
-                filings = company.get_filings(form="10-Q", year=year, quarter=quarter)
+                filings = company.get_filings(
+                    form=form, year=year, quarter=quarter, amendments=False
+                )
                 if not filings:
                     raise ValueError(
-                        f"No 10-Q filing found for {ticker.upper()} in {year} Q{quarter}"
+                        f"No {form} filing found for {ticker.upper()} in {year} Q{quarter}"
                     )
 
                 filing = filings[0]
@@ -75,9 +85,9 @@ class FilingsFetcher:
                 )
                 target_dir.mkdir(parents=True, exist_ok=True)
 
-                file_path = target_dir / f"{ticker.upper()}_{year}_Q{quarter}.txt"
-                file_path.write_text(filing.text(), encoding="utf-8")
-                return file_path
+                file_path = target_dir / f"{ticker.upper()}_{year}_Q{quarter}.md"
+                file_path.write_text(filing.markdown(), encoding="utf-8")
+                return file_path, filing
             except TimeoutError as error:
                 last_error = error
             except Exception as error:
@@ -91,14 +101,14 @@ class FilingsFetcher:
 
         if last_error is not None:
             raise TimeoutError(
-                f"Timed out fetching 10-Q for {ticker.upper()} after {self.max_retries} attempts"
+                f"Timed out fetching {form} for {ticker.upper()} after {self.max_retries} attempts"
             ) from last_error
 
-        raise TimeoutError(f"Timed out fetching 10-Q for {ticker.upper()}")
+        raise TimeoutError(f"Timed out fetching {form} for {ticker.upper()}")
 
 
 class FilingsBackfillRunner:
-    """Read S&P 500 tickers from parquet files and fetch recent 10-Q filings."""
+    """Read S&P 500 tickers from parquet files and fetch recent SEC filings."""
 
     def __init__(
         self, data_dir: Path | str = "data", fetcher: FilingsFetcher | None = None
@@ -160,8 +170,9 @@ class FilingsBackfillRunner:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_symbol = {
                 executor.submit(
-                    self.fetcher.fetch_10q,
+                    self.fetcher.fetch_filing,
                     symbol,
+                    ["10-Q", "10-K"],
                     resolved_quarter,
                     resolved_year,
                 ): symbol
@@ -170,7 +181,8 @@ class FilingsBackfillRunner:
             for future in as_completed(future_to_symbol):
                 symbol = future_to_symbol[future]
                 try:
-                    downloaded_paths.append(future.result())
+                    file_path, _ = future.result()
+                    downloaded_paths.append(file_path)
                 except Exception as error:
                     failures.append((symbol, str(error)))
         return downloaded_paths, failures

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Date, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from financial_data_agent.db.models.base import Base, TimestampMixin
@@ -23,8 +23,31 @@ class Document(TimestampMixin, Base):
         nullable=False,
     )
 
+    accession_number: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+
     document_type: Mapped[str] = mapped_column(
         String(50),
+        nullable=False,
+    )
+
+    year: Mapped[int] = mapped_column(
+        nullable=False,
+    )
+
+    quarter: Mapped[int] = mapped_column(
+        nullable=False,
+    )
+
+    filing_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+    )
+
+    period_of_report: Mapped[date] = mapped_column(
+        Date,
         nullable=False,
     )
 
@@ -32,12 +55,6 @@ class Document(TimestampMixin, Base):
         Text,
         nullable=False,
     )
-
-    source_url: Mapped[str | None] = mapped_column(
-        Text,
-    )
-
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     company: Mapped[Company] = relationship(
         back_populates="documents",
