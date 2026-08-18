@@ -1,3 +1,3 @@
-# ollama-rag
+# financial-data-agent
 
 # Setup

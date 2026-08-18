@@ -3,19 +3,42 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ollama-rag"
+name = "financial-data-agent"
 version = "0.1.0"
-description = "RAG tooling for Ollama"
+description = "Financial data agent for SEC and market data workflows"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Yucheng" }]
 dependencies = [
-"ollama==0.6.2",
-"sec-edgar-downloader==5.1.0"
+    "ollama==0.6.2",
+    "edgartools==5.43.0",
+    "fastapi[standard]==0.140.0",
+    "python-dotenv>=1.0.1",
+    "polars==1.42.1",
+    "requests==2.34.2",
+    "sqlalchemy>=2.0.51",
+    "pydantic>=2.13.4",
+    "pgvector>=0.5.0",
+    "alembic>=1.19.1",
+    "psycopg[binary]>=3.3.4",
 ]
 
+[dependency-groups]
+dev = ["ruff", "pytest"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "B", "SIM", "I"]
+
+[tool.ruff.format]  
+quote-style = "double"
+indent-style = "space"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/ollama_rag"]
+packages = ["src/financial_data_agent"]
 
 [tool.hatch.build.targets.sdist]
 include = [
