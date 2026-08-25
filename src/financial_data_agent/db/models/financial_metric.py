@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Numeric, String
+from sqlalchemy import ForeignKey, Numeric, String, BigInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from financial_data_agent.db.models.base import Base, TimestampMixin
@@ -24,21 +24,67 @@ class FinancialMetric(TimestampMixin, Base):
         nullable=False,
     )
 
-    metric_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
+    revenue: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
     )
 
-    value: Mapped[Decimal] = mapped_column(
-        Numeric(24, 6),
-        nullable=False,
+    operating_income: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
     )
 
-    period: Mapped[str | None] = mapped_column(
+    net_income: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    total_assets: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    total_liabilities: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    stockholders_equity: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    current_assets: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    operating_cash_flow: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    capital_expenditures: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    free_cash_flow: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    shares_outstanding: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    shares_outstanding_diluted: Mapped[BigInteger] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    current_ratio: Mapped[Decimal] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    debt_to_assets_ratio: Mapped[Decimal] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    period: Mapped[str] = mapped_column(
         String(30),
     )
 
-    year: Mapped[int | None] = mapped_column(
+    year: Mapped[int] = mapped_column(
         nullable=False,
     )
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -14,15 +12,6 @@ from financial_data_agent.db.repositories.document import DocumentRepository
 from financial_data_agent.ingestion.filings import FilingsFetcher
 
 router = APIRouter(tags=["Import filings"])
-
-
-def _parse_datetime(value: object) -> datetime:
-    """Convert an ISO-like filing timestamp into a datetime."""
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        return datetime.fromisoformat(value)
-    raise ValueError(f"Unsupported datetime value: {value!r}")
 
 
 def import_filing(
