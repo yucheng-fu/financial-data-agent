@@ -9,6 +9,7 @@ from financial_data_agent.constants import SP500_WIKI_URL
 
 
 def _normalize_cik(value: object) -> str | None:
+    """Normalize a CIK value to a 10-digit string or None."""
     if value is None:
         return None
     if isinstance(value, str):
