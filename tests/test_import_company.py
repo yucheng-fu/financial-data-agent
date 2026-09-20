@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from financial_data_agent.api.v1.import_company import _normalize_cik
+from financial_data_agent.ingestion.sp500 import _normalize_cik
 
 
 def test_normalize_cik_pads_integer_values() -> None:

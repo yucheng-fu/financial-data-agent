@@ -26,7 +26,7 @@ def test_company_repository_crud_round_trip() -> None:
         gics_sector="Information Technology",
         gics_sub_industry="Technology Hardware, Storage & Peripherals",
         date_added=date(2024, 1, 2),
-        cik="320193",
+        cik="0000320193",
     )
     company = repository.create(company_dto)
 
@@ -47,9 +47,9 @@ def test_company_repository_crud_round_trip() -> None:
         ),
     )
 
-    assert updated_company.name == "Apple Incorporated"
-    assert updated_company.gics_sector is None
-    assert updated_company.CIK is None
+    assert updated_company.name == "Apple Inc."
+    assert updated_company.gics_sector == "Information Technology"
+    assert updated_company.CIK == "0000320193"
     assert updated_company.date_added == date(2024, 1, 2)
     assert updated_company.ticker == "AAPL"
 
