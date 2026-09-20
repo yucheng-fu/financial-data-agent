@@ -54,10 +54,7 @@ def test_company_repository_crud_round_trip() -> None:
     assert updated_company.name == "Apple Incorporated"
     assert updated_company.gics_sector is None
     assert updated_company.CIK == "0000320194"
-    assert (
-        updated_company.gics_sub_industry
-        == "Technology Hardware, Storage & Peripherals"
-    )
+    assert updated_company.gics_sub_industry == "Technology Hardware, Storage & Peripherals"
     assert updated_company.date_added == date(2024, 1, 2)
     assert updated_company.ticker == "AAPL"
 

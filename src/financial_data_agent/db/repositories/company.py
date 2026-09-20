@@ -5,8 +5,8 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from financial_data_agent.db.models.company import Company
 from financial_data_agent.db.DTO.company import CompanyDTO
+from financial_data_agent.db.models.company import Company
 
 
 class CompanyRepository:
@@ -34,7 +34,7 @@ class CompanyRepository:
 
     def get_by_cik(self, cik: str) -> Company | None:
         """Return a company by CIK."""
-        statement = select(Company).where(Company.CIK == cik)
+        statement = select(Company).where(cik == Company.CIK)
         return self.session.scalar(statement)
 
     def list(self) -> Sequence[Company]:

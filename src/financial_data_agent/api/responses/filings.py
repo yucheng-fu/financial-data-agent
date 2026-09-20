@@ -10,4 +10,3 @@ class FilingImportResponse(BaseModel):
     year: int
     quarter: int
     file_path: str
-

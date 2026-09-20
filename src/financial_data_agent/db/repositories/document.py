@@ -27,6 +27,15 @@ class DocumentRepository:
         """Return a document by primary key."""
         return self.session.get(Document, document_id)
 
+    def get_latest_for_period(self, company_id: int, year: int, quarter: int) -> Document | None:
+        """Return the most recently created document of a company for a period."""
+        statement = (
+            select(Document)
+            .where(Document.company_id == company_id, Document.year == year, Document.quarter == quarter)
+            .order_by(Document.id.desc())
+        )
+        return self.session.scalars(statement).first()
+
     def list(self) -> Sequence[Document]:
         """Return all documents ordered by id."""
         statement = select(Document).order_by(Document.id)
@@ -43,4 +52,3 @@ class DocumentRepository:
         """Delete a document from the database."""
         self.session.delete(document)
         self.session.commit()
-

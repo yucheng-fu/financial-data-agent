@@ -60,9 +60,7 @@ class FilingImportService:
                 ticker=ticker, form=["10-Q", "10-K"], quarter=quarter, year=year
             )
         except ValueError as error:
-            raise FilingNotFoundError(
-                f"SEC filing not found for {normalized_ticker} in {year} Q{quarter}"
-            ) from error
+            raise FilingNotFoundError(f"SEC filing not found for {normalized_ticker} in {year} Q{quarter}") from error
         self.document_repository.create(
             DocumentDTO(
                 company_id=company.id,
@@ -75,8 +73,14 @@ class FilingImportService:
                 raw_document_path=file_path.as_posix(),
                 supplied_fields=frozenset(
                     {
-                        "company_id", "accession_number", "document_type", "year", "quarter",
-                        "filing_date", "period_of_report", "raw_document_path",
+                        "company_id",
+                        "accession_number",
+                        "document_type",
+                        "year",
+                        "quarter",
+                        "filing_date",
+                        "period_of_report",
+                        "raw_document_path",
                     }
                 ),
             )

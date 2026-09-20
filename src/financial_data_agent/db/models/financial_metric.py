@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Numeric, String, BigInteger
+from sqlalchemy import ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from financial_data_agent.db.models.base import Base, TimestampMixin
@@ -24,59 +24,59 @@ class FinancialMetric(TimestampMixin, Base):
         nullable=False,
     )
 
-    revenue: Mapped[BigInteger] = mapped_column(
+    revenue: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    operating_income: Mapped[BigInteger] = mapped_column(
+    operating_income: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    net_income: Mapped[BigInteger] = mapped_column(
+    net_income: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    total_assets: Mapped[BigInteger] = mapped_column(
+    total_assets: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    total_liabilities: Mapped[BigInteger] = mapped_column(
+    total_liabilities: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    stockholders_equity: Mapped[BigInteger] = mapped_column(
+    stockholders_equity: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    current_assets: Mapped[BigInteger] = mapped_column(
+    current_assets: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    operating_cash_flow: Mapped[BigInteger] = mapped_column(
+    operating_cash_flow: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    capital_expenditures: Mapped[BigInteger] = mapped_column(
+    capital_expenditures: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    free_cash_flow: Mapped[BigInteger] = mapped_column(
+    free_cash_flow: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    shares_outstanding: Mapped[BigInteger] = mapped_column(
+    shares_outstanding: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    shares_outstanding_diluted: Mapped[BigInteger] = mapped_column(
+    shares_outstanding_diluted: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    current_ratio: Mapped[Decimal] = mapped_column(
+    current_ratio: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 
-    debt_to_assets_ratio: Mapped[Decimal] = mapped_column(
+    debt_to_assets_ratio: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
     )
 

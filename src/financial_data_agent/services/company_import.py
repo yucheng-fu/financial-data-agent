@@ -57,14 +57,10 @@ def _row_to_company_dto(row: dict[str, object]) -> CompanyDTO:
         ticker=row.get("Symbol") if isinstance(row.get("Symbol"), str) else None,
         name=row.get("Security") if isinstance(row.get("Security"), str) else None,
         gics_sector=(row.get("GICS Sector") if isinstance(row.get("GICS Sector"), str) else None),
-        gics_sub_industry=(
-            row.get("GICS Sub-Industry") if isinstance(row.get("GICS Sub-Industry"), str) else None
-        ),
+        gics_sub_industry=(row.get("GICS Sub-Industry") if isinstance(row.get("GICS Sub-Industry"), str) else None),
         date_added=_parse_date(row.get("Date added")),
         cik=row.get("CIK") if isinstance(row.get("CIK"), str) else row.get("CIK"),
-        supplied_fields=frozenset(
-            {"ticker", "name", "gics_sector", "gics_sub_industry", "date_added", "cik"}
-        ),
+        supplied_fields=frozenset({"ticker", "name", "gics_sector", "gics_sub_industry", "date_added", "cik"}),
     )
 
 

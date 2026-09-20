@@ -1,7 +1,61 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from decimal import Decimal
 
 from financial_data_agent.db.models.financial_metric import FinancialMetric
-from financial_data_agent.db.schemas.company import CompanyCreate, CompanyUpdate
+
+METRIC_FIELDS: tuple[str, ...] = (
+    "revenue",
+    "operating_income",
+    "net_income",
+    "total_assets",
+    "total_liabilities",
+    "stockholders_equity",
+    "current_assets",
+    "operating_cash_flow",
+    "capital_expenditures",
+    "free_cash_flow",
+    "shares_outstanding",
+    "shares_outstanding_diluted",
+    "current_ratio",
+    "debt_to_assets_ratio",
+)
+
+
+@dataclass(slots=True)
+class FinancialMetricDTO:
+    document_id: int | None = None
+    revenue: Decimal | None = None
+    operating_income: Decimal | None = None
+    net_income: Decimal | None = None
+    total_assets: Decimal | None = None
+    total_liabilities: Decimal | None = None
+    stockholders_equity: Decimal | None = None
+    current_assets: Decimal | None = None
+    operating_cash_flow: Decimal | None = None
+    capital_expenditures: Decimal | None = None
+    free_cash_flow: Decimal | None = None
+    shares_outstanding: Decimal | None = None
+    shares_outstanding_diluted: Decimal | None = None
+    current_ratio: Decimal | None = None
+    debt_to_assets_ratio: Decimal | None = None
+    period: str | None = None
+    year: int | None = None
+    supplied_fields: frozenset[str] = frozenset()
+
+    def to_model_kwargs(self) -> dict[str, object | None]:
+        """Convert the DTO to SQLAlchemy model keyword arguments."""
+        return {
+            "document_id": self.document_id,
+            **{field: getattr(self, field) for field in METRIC_FIELDS},
+            "period": self.period,
+            "year": self.year,
+        }
+
+    def apply_to(self, financial_metric: FinancialMetric) -> FinancialMetric:
+        """Apply DTO values to an existing financial metric model."""
+        for field in ("document_id", *METRIC_FIELDS, "period", "year"):
+            if field in self.supplied_fields:
+                setattr(financial_metric, field, getattr(self, field))
+        return financial_metric
