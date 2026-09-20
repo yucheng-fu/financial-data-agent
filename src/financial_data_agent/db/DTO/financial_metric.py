@@ -45,7 +45,11 @@ class FinancialMetricDTO:
     supplied_fields: frozenset[str] = frozenset()
 
     def to_model_kwargs(self) -> dict[str, object | None]:
-        """Convert the DTO to SQLAlchemy model keyword arguments."""
+        """Convert the DTO to SQLAlchemy model keyword arguments.
+
+        Returns:
+            Keyword arguments for the financial metric model constructor.
+        """
         return {
             "document_id": self.document_id,
             **{field: getattr(self, field) for field in METRIC_FIELDS},
@@ -54,7 +58,14 @@ class FinancialMetricDTO:
         }
 
     def apply_to(self, financial_metric: FinancialMetric) -> FinancialMetric:
-        """Apply DTO values to an existing financial metric model."""
+        """Apply DTO values to an existing financial metric model.
+
+        Args:
+            financial_metric: Financial metric model to update.
+
+        Returns:
+            The financial metric with the supplied fields applied.
+        """
         for field in ("document_id", *METRIC_FIELDS, "period", "year"):
             if field in self.supplied_fields:
                 setattr(financial_metric, field, getattr(self, field))

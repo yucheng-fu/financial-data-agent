@@ -2,12 +2,15 @@ import os
 from collections.abc import Generator
 from functools import lru_cache
 
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 
 def get_database_url() -> str:
     """Return the configured database URL.
+
+    Returns:
+        The database URL.
 
     Raises:
         RuntimeError: If `DATABASE_URL` is not set.
@@ -19,19 +22,31 @@ def get_database_url() -> str:
 
 
 @lru_cache(maxsize=1)
-def get_engine():
-    """Create and cache the SQLAlchemy engine."""
+def get_engine() -> Engine:
+    """Create and cache the SQLAlchemy engine.
+
+    Returns:
+        The shared SQLAlchemy engine.
+    """
     return create_engine(get_database_url(), pool_pre_ping=True)
 
 
 @lru_cache(maxsize=1)
 def get_session_factory() -> sessionmaker[Session]:
-    """Create and cache the SQLAlchemy session factory."""
+    """Create and cache the SQLAlchemy session factory.
+
+    Returns:
+        The shared session factory.
+    """
     return sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
 
 
 def get_session() -> Generator[Session, None, None]:
-    """Yield a SQLAlchemy session for FastAPI dependencies."""
+    """Yield a SQLAlchemy session for FastAPI dependencies.
+
+    Yields:
+        A database session that is closed after use.
+    """
     session = get_session_factory()()
     try:
         yield session

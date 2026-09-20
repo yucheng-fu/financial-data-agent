@@ -27,7 +27,18 @@ def import_financial_metrics(
     request: FinancialMetricsImportRequest,
     session: Annotated[Session, Depends(get_session)],
 ) -> FinancialMetricsImportResponse:
-    """Extract the financial metrics of a stored filing and save them to the database."""
+    """Extract the financial metrics of a stored filing and save them to the database.
+
+    Args:
+        request: Ticker, year, and quarter of the filing.
+        session: Database session dependency.
+
+    Returns:
+        The ticker, period, and whether the metrics were created or updated.
+
+    Raises:
+        HTTPException: 404 if the company or filing is not in the database, 422 if the SEC data is unavailable.
+    """
     try:
         result = FinancialMetricsImportService(session).import_metrics(
             ticker=request.ticker, year=request.year, quarter=request.quarter

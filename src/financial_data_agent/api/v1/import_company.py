@@ -24,7 +24,14 @@ router = APIRouter(tags=["Import company data"])
 def import_sp500_companies(
     session: Annotated[Session, Depends(get_session)],
 ) -> CompanyImportSummaryResponse:
-    """Fetch the current S&P 500 table from Wikipedia and sync it into the database."""
+    """Fetch the current S&P 500 table from Wikipedia and sync it into the database.
+
+    Args:
+        session: Database session dependency.
+
+    Returns:
+        Number of companies created, updated, and in total.
+    """
     summary = CompanyImportService(session).import_all()
     return CompanyImportSummaryResponse(created=summary.created, updated=summary.updated, total=summary.total)
 
@@ -34,7 +41,18 @@ def import_sp500_company(
     request: CompanyImportRequest,
     session: Annotated[Session, Depends(get_session)],
 ) -> CompanyImportResponse:
-    """Fetch a single S&P 500 company from Wikipedia and sync it into the database."""
+    """Fetch a single S&P 500 company from Wikipedia and sync it into the database.
+
+    Args:
+        request: Ticker of the company to import.
+        session: Database session dependency.
+
+    Returns:
+        The ticker and whether the company was created or updated.
+
+    Raises:
+        HTTPException: 404 if the ticker is not in the S&P 500 table, 422 if it cannot be mapped.
+    """
     try:
         result = CompanyImportService(session).import_one(request.ticker)
     except CompanyNotFoundError as error:

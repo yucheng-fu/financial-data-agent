@@ -48,6 +48,14 @@ class FinancialMetricsImportService:
     def import_metrics(self, ticker: str, year: int, quarter: int) -> FinancialMetricsImportResult:
         """Extract and persist the financial metrics of a stored filing.
 
+        Args:
+            ticker: Ticker symbol of the company.
+            year: Filing year.
+            quarter: Calendar quarter, from 1 to 4.
+
+        Returns:
+            The normalized ticker, period, and whether the metrics were created or updated.
+
         Raises:
             CompanyNotFoundError: If the company does not exist in the database.
             DocumentNotFoundError: If the company has no filing in the database for the period.

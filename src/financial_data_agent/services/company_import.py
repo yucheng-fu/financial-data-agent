@@ -28,7 +28,11 @@ class CompanyImportSummary:
 
     @property
     def total(self) -> int:
-        """Return the number of companies created or updated."""
+        """Return the number of companies created or updated.
+
+        Returns:
+            The sum of created and updated companies.
+        """
         return self.created + self.updated
 
 
@@ -41,7 +45,14 @@ class CompanyImportResult:
 
 
 def _parse_date(value: object) -> date | None:
-    """Convert a source date value into a date."""
+    """Convert a source date value into a date.
+
+    Args:
+        value: Date, ISO-formatted string, or None.
+
+    Returns:
+        The parsed date, or None if empty.
+    """
     if value is None:
         return None
     if isinstance(value, date):
@@ -52,7 +63,14 @@ def _parse_date(value: object) -> date | None:
 
 
 def _row_to_company_dto(row: dict[str, object]) -> CompanyDTO:
-    """Map an S&P 500 source row to a company DTO."""
+    """Map an S&P 500 source row to a company DTO.
+
+    Args:
+        row: S&P 500 table row keyed by column name.
+
+    Returns:
+        A company DTO with every field supplied.
+    """
     return CompanyDTO(
         ticker=row.get("Symbol") if isinstance(row.get("Symbol"), str) else None,
         name=row.get("Security") if isinstance(row.get("Security"), str) else None,
@@ -78,7 +96,11 @@ class CompanyImportService:
         self.fetcher = fetcher or SP500Fetcher()
 
     def import_all(self) -> CompanyImportSummary:
-        """Fetch and synchronize all available S&P 500 companies."""
+        """Fetch and synchronize all available S&P 500 companies.
+
+        Returns:
+            Number of companies created and updated.
+        """
         frame = self.fetcher.fetch(save_parquet=True)
         created = 0
         updated = 0
@@ -99,6 +121,12 @@ class CompanyImportService:
 
     def import_one(self, ticker: str) -> CompanyImportResult:
         """Fetch and synchronize one S&P 500 company.
+
+        Args:
+            ticker: Ticker symbol of the company to import.
+
+        Returns:
+            The normalized ticker and whether the company was created or updated.
 
         Raises:
             CompanyNotFoundError: If the ticker is not in the source data.

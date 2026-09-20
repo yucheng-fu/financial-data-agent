@@ -11,6 +11,14 @@ from financial_data_agent.constants import SEC_IDENTITY
 
 
 def parse_quarters(raw_quarters: list[str]) -> list[int]:
+    """Parse quarter arguments that may be comma separated.
+
+    Args:
+        raw_quarters: Quarter values such as ['1', '2,3'].
+
+    Returns:
+        The quarters as integers.
+    """
     quarters: list[int] = []
     for value in raw_quarters:
         quarters.extend(int(part) for part in value.split(",") if part)
@@ -18,7 +26,11 @@ def parse_quarters(raw_quarters: list[str]) -> list[int]:
 
 
 def _default_data_dir() -> Path:
-    """Return the repository-level data directory."""
+    """Return the repository-level data directory.
+
+    Returns:
+        Path to the data directory.
+    """
     return Path(__file__).resolve().parents[3] / "data"
 
 
@@ -117,13 +129,21 @@ class FilingsBackfillRunner:
         self.fetcher = fetcher or FilingsFetcher(data_dir=data_dir)
 
     def _current_period(self) -> tuple[int, int]:
-        """Return the current calendar year and quarter."""
+        """Return the current calendar year and quarter.
+
+        Returns:
+            The current year and quarter.
+        """
         today = date.today()
         quarter = (today.month - 1) // 3 + 1
         return today.year, quarter
 
     def _load_symbols(self) -> list[str]:
-        """Load ticker symbols from parquet files in the data directory."""
+        """Load ticker symbols from parquet files in the data directory.
+
+        Returns:
+            Ticker symbols found in the parquet files.
+        """
         symbols: list[str] = []
         for parquet_file in sorted(self.data_dir.glob("*.parquet")):
             frame = pl.read_parquet(parquet_file)
@@ -214,7 +234,11 @@ def run_periods(
 
 
 def main() -> None:
-    """Run the filings backfill workflow."""
+    """Run the filings backfill workflow.
+
+    Raises:
+        SystemExit: If no parquet file with a Symbol column is found.
+    """
     parser = argparse.ArgumentParser(description="Backfill SEC 10-Q filings from parquet tickers.")
     parser.add_argument("--start-year", type=int, default=2022, help="Start year to process.")
     parser.add_argument("--end-year", type=int, default=2025, help="End year to process.")

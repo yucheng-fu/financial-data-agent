@@ -47,6 +47,14 @@ class FilingImportService:
     def import_filing(self, ticker: str, year: int, quarter: int) -> FilingImportResult:
         """Download and persist a filing for a company and reporting period.
 
+        Args:
+            ticker: Ticker symbol of the company.
+            year: Filing year.
+            quarter: Calendar quarter, from 1 to 4.
+
+        Returns:
+            The normalized ticker, period, and path of the saved filing.
+
         Raises:
             CompanyNotFoundError: If the company does not exist in the database.
             FilingNotFoundError: If the SEC has no matching filing.
@@ -89,7 +97,14 @@ class FilingImportService:
 
 
 def _parse_date(value: object) -> object:
-    """Convert ISO-formatted date-time strings from the SEC client."""
+    """Convert ISO-formatted date-time strings from the SEC client.
+
+    Args:
+        value: ISO-formatted date-time string or an already parsed value.
+
+    Returns:
+        The parsed date-time, or the value unchanged if it is not a string.
+    """
     if isinstance(value, str):
         return datetime.fromisoformat(value)
     return value

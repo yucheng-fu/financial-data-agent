@@ -22,7 +22,18 @@ def download_filing(
     request: FilingImportRequest,
     session: Annotated[Session, Depends(get_session)],
 ) -> FilingImportResponse:
-    """Download a SEC filing for the requested ticker, year, and quarter."""
+    """Download a SEC filing for the requested ticker, year, and quarter.
+
+    Args:
+        request: Ticker, year, and quarter of the filing.
+        session: Database session dependency.
+
+    Returns:
+        The ticker, period, and file path of the downloaded filing.
+
+    Raises:
+        HTTPException: 404 if the company is not in the database or the SEC has no matching filing.
+    """
     try:
         result = FilingImportService(session).import_filing(
             ticker=request.ticker, year=request.year, quarter=request.quarter

@@ -6,7 +6,11 @@ router = APIRouter(tags=["Cowsay"])
 
 @router.get("/cow", response_class=PlainTextResponse)
 def get_cow() -> str:
-    """Cowsay."""
+    """Cowsay.
+
+    Returns:
+        A cow saying hello world.
+    """
     return r"""
   _____________
 < hello world >
