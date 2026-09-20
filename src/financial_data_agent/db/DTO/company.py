@@ -19,7 +19,14 @@ class CompanyDTO:
 
     @classmethod
     def from_create_schema(cls, company: CompanyCreate) -> CompanyDTO:
-        """Build a DTO from an API create schema."""
+        """Build a DTO from an API create schema.
+
+        Args:
+            company: Validated company creation payload.
+
+        Returns:
+            A DTO with every field supplied.
+        """
         return cls(
             ticker=company.ticker,
             name=company.name,
@@ -32,7 +39,14 @@ class CompanyDTO:
 
     @classmethod
     def from_update_schema(cls, company: CompanyUpdate) -> CompanyDTO:
-        """Build a DTO from an API update schema."""
+        """Build a DTO from an API update schema.
+
+        Args:
+            company: Validated company update payload.
+
+        Returns:
+            A DTO whose supplied fields are the ones set in the payload.
+        """
         supplied_fields = frozenset(company.model_fields_set)
         data = company.model_dump(exclude_unset=True)
         return cls(
@@ -46,7 +60,11 @@ class CompanyDTO:
         )
 
     def to_model_kwargs(self) -> dict[str, object | None]:
-        """Convert the DTO to SQLAlchemy model keyword arguments."""
+        """Convert the DTO to SQLAlchemy model keyword arguments.
+
+        Returns:
+            Keyword arguments for the company model constructor.
+        """
         return {
             "ticker": self.ticker,
             "name": self.name,
@@ -57,7 +75,14 @@ class CompanyDTO:
         }
 
     def apply_to(self, company: Company) -> Company:
-        """Apply DTO values to an existing company model."""
+        """Apply DTO values to an existing company model.
+
+        Args:
+            company: Company model to update.
+
+        Returns:
+            The company with the supplied fields applied.
+        """
         if "ticker" in self.supplied_fields:
             company.ticker = self.ticker
         if "name" in self.supplied_fields:

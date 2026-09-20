@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from financial_data_agent.api.main import app
 from financial_data_agent.api.v1 import import_filings
 from financial_data_agent.db.DTO.document import DocumentDTO
+from financial_data_agent.services import filing_import
 
 
 def test_import_filings_downloads_filing(monkeypatch) -> None:
@@ -34,11 +35,9 @@ def test_import_filings_downloads_filing(monkeypatch) -> None:
 
     fake_document_repository = FakeDocumentRepository(session=object())
 
-    def fake_fetch_filing(
-        self, ticker: str, form: str, quarter: int, year: int
-    ) -> tuple[Path, object]:
+    def fake_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[Path, object]:
         assert ticker == "AAPL"
-        assert form == "10-Q"
+        assert form == ["10-Q", "10-K"]
         assert quarter == 2
         assert year == 2026
         filing = SimpleNamespace(
@@ -50,13 +49,13 @@ def test_import_filings_downloads_filing(monkeypatch) -> None:
         return Path("data/ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2.md"), filing
 
     monkeypatch.setattr(
-        import_filings.FilingsFetcher,
+        filing_import.FilingsFetcher,
         "fetch_filing",
         fake_fetch_filing,
     )
-    monkeypatch.setattr(import_filings, "CompanyRepository", FakeCompanyRepository)
+    monkeypatch.setattr(filing_import, "CompanyRepository", FakeCompanyRepository)
     monkeypatch.setattr(
-        import_filings,
+        filing_import,
         "DocumentRepository",
         lambda session: fake_document_repository,
     )
@@ -130,16 +129,14 @@ def test_import_filings_rejects_missing_company_before_download(monkeypatch) -> 
             self.create_called = True
             return object()
 
-    def fail_fetch_filing(
-        self, ticker: str, form: str, quarter: int, year: int
-    ) -> Path:
+    def fail_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> Path:
         raise AssertionError("fetch_filing should not be called when the company is missing")
 
     fake_document_repository = FakeDocumentRepository(session=object())
-    monkeypatch.setattr(import_filings.FilingsFetcher, "fetch_filing", fail_fetch_filing)
-    monkeypatch.setattr(import_filings, "CompanyRepository", FakeCompanyRepository)
+    monkeypatch.setattr(filing_import.FilingsFetcher, "fetch_filing", fail_fetch_filing)
+    monkeypatch.setattr(filing_import, "CompanyRepository", FakeCompanyRepository)
     monkeypatch.setattr(
-        import_filings,
+        filing_import,
         "DocumentRepository",
         lambda session: fake_document_repository,
     )
@@ -180,16 +177,14 @@ def test_import_filings_rejects_missing_sec_filing(monkeypatch) -> None:
             self.create_called = True
             return object()
 
-    def fake_fetch_filing(
-        self, ticker: str, form: str, quarter: int, year: int
-    ) -> Path:
+    def fake_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> Path:
         raise ValueError("No 10-Q filing found for AAPL in 2026 Q2")
 
     fake_document_repository = FakeDocumentRepository(session=object())
-    monkeypatch.setattr(import_filings.FilingsFetcher, "fetch_filing", fake_fetch_filing)
-    monkeypatch.setattr(import_filings, "CompanyRepository", FakeCompanyRepository)
+    monkeypatch.setattr(filing_import.FilingsFetcher, "fetch_filing", fake_fetch_filing)
+    monkeypatch.setattr(filing_import, "CompanyRepository", FakeCompanyRepository)
     monkeypatch.setattr(
-        import_filings,
+        filing_import,
         "DocumentRepository",
         lambda session: fake_document_repository,
     )

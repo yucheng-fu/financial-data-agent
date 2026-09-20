@@ -8,28 +8,11 @@ import requests
 from financial_data_agent.constants import SP500_WIKI_URL
 
 
-def _normalize_cik(value: object) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        cleaned = value.strip()
-        if not cleaned:
-            return None
-        digits = cleaned.removeprefix("CIK").strip()
-        if digits.isdigit():
-            return digits.zfill(10)
-        return cleaned
-    if isinstance(value, int):
-        return f"{value:010d}"
-    if isinstance(value, float) and value.is_integer():
-        return f"{int(value):010d}"
-    return str(value)
-
-
 class SP500Fetcher:
     """Fetch and optionally persist the current S&P 500 table from Wikipedia."""
 
     def __init__(self) -> None:
+        """Initialize the fetcher."""
         self.url = SP500_WIKI_URL
         self.headers = {
             "User-Agent": (
@@ -50,11 +33,8 @@ class SP500Fetcher:
         """
         response = requests.get(self.url, headers=self.headers, timeout=30)
         response.raise_for_status()
-        tables = pd.read_html(StringIO(response.text))
-        table = tables[0].copy()
-        if "CIK" in table.columns:
-            table["CIK"] = table["CIK"].map(_normalize_cik)
-        df = pl.from_pandas(table)
+        tables = pd.read_html(StringIO(response.text), converters={"CIK": str})
+        df = pl.from_pandas(tables[0])
 
         Path("data").mkdir(exist_ok=True)
         if save_parquet:

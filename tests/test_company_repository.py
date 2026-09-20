@@ -26,10 +26,11 @@ def test_company_repository_crud_round_trip() -> None:
         gics_sector="Information Technology",
         gics_sub_industry="Technology Hardware, Storage & Peripherals",
         date_added=date(2024, 1, 2),
-        cik="320193",
+        cik="0000320193",
     )
     company = repository.create(company_dto)
 
+    # Verify that the company was created and can be retrieved by ID and ticker
     assert company.id is not None
     assert repository.get_by_id(company.id) == company
     assert repository.get_by_ticker("AAPL") == company
@@ -38,22 +39,28 @@ def test_company_repository_crud_round_trip() -> None:
     assert len(companies) == 1
     assert companies[0] == company
 
+    # Update the company with new values, including setting gics_sector to None
     updated_company = repository.update(
         company,
         CompanyDTO(
             name="Apple Incorporated",
             gics_sector=None,
-            cik=None,
+            cik="0000320194",
+            supplied_fields=frozenset({"name", "gics_sector", "cik"}),
         ),
     )
 
+    # Verify that the company was updated correctly
     assert updated_company.name == "Apple Incorporated"
     assert updated_company.gics_sector is None
-    assert updated_company.CIK is None
+    assert updated_company.CIK == "0000320194"
+    assert updated_company.gics_sub_industry == "Technology Hardware, Storage & Peripherals"
     assert updated_company.date_added == date(2024, 1, 2)
     assert updated_company.ticker == "AAPL"
 
+    # Delete the company
     repository.delete(company)
 
+    # Verify that the company was deleted
     assert repository.get_by_id(company.id) is None
     assert repository.list() == []

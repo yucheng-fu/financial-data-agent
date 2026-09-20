@@ -1,2 +1,11 @@
-from financial_data_agent.api.requests.filings import FilingImportRequest
 from financial_data_agent.api.requests.companies import CompanyImportRequest
+from financial_data_agent.api.requests.filings import FilingImportRequest
+from financial_data_agent.api.requests.financial_metrics import (
+    FinancialMetricsImportRequest,
+)
+
+__all__ = [
+    "CompanyImportRequest",
+    "FilingImportRequest",
+    "FinancialMetricsImportRequest",
+]

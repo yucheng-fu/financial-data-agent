@@ -16,4 +16,3 @@ class CompanyImportResponse(BaseModel):
 
     ticker: str
     status: str
-

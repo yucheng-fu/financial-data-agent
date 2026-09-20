@@ -7,4 +7,3 @@ class CompanyImportRequest(BaseModel):
     """Request payload for importing a single S&P 500 company."""
 
     ticker: str
-

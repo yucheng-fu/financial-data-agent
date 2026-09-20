@@ -24,21 +24,67 @@ class FinancialMetric(TimestampMixin, Base):
         nullable=False,
     )
 
-    metric_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
+    revenue: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
     )
 
-    value: Mapped[Decimal] = mapped_column(
-        Numeric(24, 6),
-        nullable=False,
+    operating_income: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
     )
 
-    period: Mapped[str | None] = mapped_column(
+    net_income: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    total_assets: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    total_liabilities: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    stockholders_equity: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    current_assets: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    operating_cash_flow: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    capital_expenditures: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    free_cash_flow: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    shares_outstanding: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    shares_outstanding_diluted: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    current_ratio: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    debt_to_assets_ratio: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=20, scale=2),
+    )
+
+    period: Mapped[str] = mapped_column(
         String(30),
     )
 
-    year: Mapped[int | None] = mapped_column(
+    year: Mapped[int] = mapped_column(
         nullable=False,
     )
 

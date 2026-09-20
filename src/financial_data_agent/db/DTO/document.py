@@ -21,7 +21,14 @@ class DocumentDTO:
 
     @classmethod
     def from_create_schema(cls, document: DocumentCreate) -> DocumentDTO:
-        """Build a DTO from an API create schema."""
+        """Build a DTO from an API create schema.
+
+        Args:
+            document: Validated document creation payload.
+
+        Returns:
+            A DTO with every field supplied.
+        """
         return cls(
             company_id=document.company_id,
             accession_number=document.accession_number,
@@ -47,7 +54,14 @@ class DocumentDTO:
 
     @classmethod
     def from_update_schema(cls, document: DocumentUpdate) -> DocumentDTO:
-        """Build a DTO from an API update schema."""
+        """Build a DTO from an API update schema.
+
+        Args:
+            document: Validated document update payload.
+
+        Returns:
+            A DTO whose supplied fields are the ones set in the payload.
+        """
         supplied_fields = frozenset(document.model_fields_set)
         data = document.model_dump(exclude_unset=True)
         return cls(
@@ -63,7 +77,11 @@ class DocumentDTO:
         )
 
     def to_model_kwargs(self) -> dict[str, object | None]:
-        """Convert the DTO to SQLAlchemy model keyword arguments."""
+        """Convert the DTO to SQLAlchemy model keyword arguments.
+
+        Returns:
+            Keyword arguments for the document model constructor.
+        """
         return {
             "company_id": self.company_id,
             "accession_number": self.accession_number,
@@ -76,7 +94,14 @@ class DocumentDTO:
         }
 
     def apply_to(self, document: Document) -> Document:
-        """Apply DTO values to an existing document model."""
+        """Apply DTO values to an existing document model.
+
+        Args:
+            document: Document model to update.
+
+        Returns:
+            The document with the supplied fields applied.
+        """
         if "company_id" in self.supplied_fields:
             document.company_id = self.company_id
         if "accession_number" in self.supplied_fields:

@@ -1,16 +1,27 @@
 from __future__ import annotations
 
-from financial_data_agent.api.v1.import_company import _normalize_cik
+from types import SimpleNamespace
+
+import polars as pl
+import pytest
+
+from financial_data_agent.ingestion import sp500
+from financial_data_agent.ingestion.sp500 import SP500Fetcher
+
+SP500_HTML = """
+<table>
+  <tr><th>Symbol</th><th>Security</th><th>CIK</th></tr>
+  <tr><td>AAPL</td><td>Apple Inc.</td><td>0000320193</td></tr>
+  <tr><td>MSFT</td><td>Microsoft</td><td>0000789019</td></tr>
+</table>
+"""
 
 
-def test_normalize_cik_pads_integer_values() -> None:
-    assert _normalize_cik(320193) == "0000320193"
+def test_fetch_keeps_leading_zeros_in_cik(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = SimpleNamespace(text=SP500_HTML, raise_for_status=lambda: None)
+    monkeypatch.setattr(sp500.requests, "get", lambda *args, **kwargs: response)
 
+    frame = SP500Fetcher().fetch(save_parquet=False)
 
-def test_normalize_cik_preserves_zero_padded_strings() -> None:
-    assert _normalize_cik("0000320193") == "0000320193"
-
-
-def test_normalize_cik_returns_none_for_empty_values() -> None:
-    assert _normalize_cik(None) is None
-    assert _normalize_cik("") is None
+    assert frame.schema["CIK"] == pl.String
+    assert frame["CIK"].to_list() == ["0000320193", "0000789019"]
