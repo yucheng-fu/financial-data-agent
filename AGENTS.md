@@ -45,7 +45,7 @@ AI assistant for analysing S&P 500 earnings reports. `docs/architecture.md` desc
 ### Architecture
 Layered, with strict one-way dependencies: **api/v1 route → services → repositories → models**, plus **ingestion** for external data sources.
 
-- `api/v1/*` - Thin FastAPI routes. They take a `Session` via `Depends(get_session)`, call a service, and translate service exceptions (e.g. `CompanyNotFoundError`, `FilingNotFoundError`) into `HTTPException`. Request/response pydantic models live in `api/requests/` and `api/responses/`. New routers must be registered in `api/router.py` (`import_financial_metrics` is not registered yet).
+- `api/v1/*` - Thin FastAPI routes. They take a `Session` via `Depends(get_session)`, call a service, and translate service exceptions (e.g. `CompanyNotFoundError`, `FilingNotFoundError`) into `HTTPException`. Request/response pydantic models live in `api/requests/` and `api/responses/`. New routers must be registered in `api/router.py`.
 - `services/` - Business logic (`company_import`, `filing_import`, `financial_metrics_import`). Services build their own repositories from the session and take an optional injected fetcher (`SP500Fetcher`, `FilingsFetcher`) for testability. Each service defines its own domain exceptions.
 - `ingestion/` - External I/O only: `sp500.py` scrapes the S&P 500 list from Wikipedia (Polars DataFrame, cached to `data/s&p500.parquet`); `filings.py` uses `edgartools` to download 10-Q/10-K filings as markdown under `data/ticker=<T>/...` and also has a CLI-style bulk backfill (threaded, by year/quarter).
 - `db/` - SQLAlchemy 2.0 models (`Company`, `Document`, `FinancialMetric`, with `TimestampMixin`), repositories (session-based CRUD; they `commit()` per operation), pydantic `schemas/` for API payloads, and **DTOs** (`db/DTO/`) that sit between schemas/services and models. DTOs carry a `supplied_fields` frozenset so updates only touch fields that were explicitly provided (partial-update semantics); `to_model_kwargs()` produces the model constructor args. When building a DTO in a service, set `supplied_fields` to every field you want written.
@@ -61,6 +61,7 @@ Uses `uv` (Python >=3.11).
 - Install: `uv sync`
 - Run all tests: `uv run pytest`; a single test: `uv run pytest tests/test_import_filings.py::test_import_filings_downloads_filing`
 - Lint and format (ruff): `uv run ruff check .` and `uv run ruff format .`
+- Type check (pyrefly): `uv run pyrefly check`
 - Postgres (pgvector): `docker compose up -d` (reads `POSTGRES_USER/PASSWORD/DB` from `.env`)
 - Migrations (run from `src/financial_data_agent/`, where the working `alembic.ini` and `migrations/` live): `alembic revision --autogenerate -m "name"` then `alembic upgrade head`
 - API: `uv run fastapi dev src/financial_data_agent/api/main.py`
