@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from financial_data_agent.api.main import app
-from financial_data_agent.api.v1 import import_filings
 from financial_data_agent.db.DTO.document import DocumentDTO
 from financial_data_agent.services import filing_import
 
@@ -60,15 +59,11 @@ def test_import_filings_downloads_filing(monkeypatch) -> None:
         lambda session: fake_document_repository,
     )
 
-    app.dependency_overrides[import_filings.get_session] = lambda: object()
-    try:
-        client = TestClient(app)
-        response = client.post(
-            "/api/v1/filings/import",
-            json={"ticker": "AAPL", "year": 2026, "quarter": 2},
-        )
-    finally:
-        app.dependency_overrides.clear()
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/filings/import",
+        json={"ticker": "AAPL", "year": 2026, "quarter": 2},
+    )
 
     assert response.status_code == 200
     assert response.json() == {
@@ -141,15 +136,11 @@ def test_import_filings_rejects_missing_company_before_download(monkeypatch) -> 
         lambda session: fake_document_repository,
     )
 
-    app.dependency_overrides[import_filings.get_session] = lambda: object()
-    try:
-        client = TestClient(app)
-        response = client.post(
-            "/api/v1/filings/import",
-            json={"ticker": "AAPL", "year": 2026, "quarter": 2},
-        )
-    finally:
-        app.dependency_overrides.clear()
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/filings/import",
+        json={"ticker": "AAPL", "year": 2026, "quarter": 2},
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Ticker AAPL was not found in the database"
@@ -189,15 +180,11 @@ def test_import_filings_rejects_missing_sec_filing(monkeypatch) -> None:
         lambda session: fake_document_repository,
     )
 
-    app.dependency_overrides[import_filings.get_session] = lambda: object()
-    try:
-        client = TestClient(app)
-        response = client.post(
-            "/api/v1/filings/import",
-            json={"ticker": "AAPL", "year": 2026, "quarter": 2},
-        )
-    finally:
-        app.dependency_overrides.clear()
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/filings/import",
+        json={"ticker": "AAPL", "year": 2026, "quarter": 2},
+    )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "SEC filing not found for AAPL in 2026 Q2"
