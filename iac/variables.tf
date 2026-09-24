@@ -4,7 +4,7 @@ variable "resource_group_name" {
 
 variable "location" {
   type    = string
-  default = "West Europe"
+  default = "Denmark East"
 }
 
 variable "env" {
