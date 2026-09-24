@@ -1,7 +1,14 @@
-module "resource_group" {
-  source = "../../modules/resource-group"
+data "azurerm_resource_group" "this" {
+  name = var.resource_group_name
+}
 
-  resource_group_name = var.resource_group_name
-  location             = var.location
-  env                  = var.env
+module "container_app" {
+  source = "../../modules/container-app"
+
+  name                = var.container_app_name
+  resource_group_name = data.azurerm_resource_group.this.name
+  location            = data.azurerm_resource_group.this.location
+  env                 = var.env
+  image               = var.container_image
+  target_port         = var.container_target_port
 }
