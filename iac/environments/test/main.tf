@@ -7,7 +7,7 @@ module "container_app" {
 
   name                = var.container_app_name
   resource_group_name = data.azurerm_resource_group.this.name
-  location            = data.azurerm_resource_group.this.location
+  location            = var.location
   env                 = var.env
   image               = var.container_image
   target_port         = var.container_target_port

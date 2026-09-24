@@ -3,6 +3,11 @@ variable "resource_group_name" {
   description = "Existing resource group to deploy into"
 }
 
+variable "location" {
+  type        = string
+  description = "Region for the deployed resources, independent of the resource group's region"
+}
+
 variable "env" {
   type        = string
   description = "Environment name, e.g. dev, test, prod"
