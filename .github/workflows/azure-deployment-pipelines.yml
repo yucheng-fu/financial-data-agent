@@ -45,66 +45,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run pytest
 
-  plan-test:
-    name: Plan iac (test)
+  deploy-test:
+    name: Deploy iac (test)
     needs: checks
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    environment: test-plan
-    concurrency:
-      group: terraform-test
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      id-token: write
-    defaults:
-      run:
-        working-directory: iac/environments/test
-    env:
-      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      ARM_USE_OIDC: "true"
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform init
-        run: terraform init -input=false
-
-      - name: Terraform plan
-        run: terraform plan -input=false -out=tfplan
-
-      - name: Plan summary
-        run: |
-          {
-            echo '```'
-            terraform show -no-color tfplan
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload plan
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-test
-          path: |
-            iac/environments/test/tfplan
-            iac/environments/test/.terraform.lock.hcl
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 1
-
-  apply-test:
-    name: Apply iac (test)
-    needs: plan-test
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
     concurrency:
-      group: terraform-test
+      group: deploy-test
       cancel-in-progress: false
     permissions:
       contents: read
@@ -121,29 +69,26 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Download plan
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-test
-          path: iac/environments/test
-
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform init
         run: terraform init -input=false
 
-      - name: Terraform apply
-        run: terraform apply -input=false tfplan
+      - name: Terraform plan
+        run: terraform plan -input=false -out=tfplan
 
-  plan-prod:
-    name: Plan iac (prod)
-    needs: apply-test
+      - name: Terraform apply
+        run: terraform apply -input=false -auto-approve tfplan
+
+  deploy-prod:
+    name: Deploy iac (prod)
+    needs: deploy-test
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: production-plan
+    environment: production
     concurrency:
-      group: terraform-prod
+      group: deploy-prod
       cancel-in-progress: false
     permissions:
       contents: read
@@ -169,60 +114,5 @@ jobs:
       - name: Terraform plan
         run: terraform plan -input=false -out=tfplan
 
-      - name: Plan summary
-        run: |
-          {
-            echo '```'
-            terraform show -no-color tfplan
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload plan
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-prod
-          path: |
-            iac/environments/prod/tfplan
-            iac/environments/prod/.terraform.lock.hcl
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 1
-
-  apply-prod:
-    name: Apply iac (prod)
-    needs: plan-prod
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    environment: production
-    concurrency:
-      group: terraform-prod
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      id-token: write
-    defaults:
-      run:
-        working-directory: iac/environments/prod
-    env:
-      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      ARM_USE_OIDC: "true"
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Download plan
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-prod
-          path: iac/environments/prod
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform init
-        run: terraform init -input=false
-
       - name: Terraform apply
-        run: terraform apply -input=false tfplan
+        run: terraform apply -input=false -auto-approve tfplan
