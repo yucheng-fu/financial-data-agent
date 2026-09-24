@@ -1,4 +1,4 @@
-resource_group_name   = "rg-fda-prod"
+resource_group_name   = "rg-fda-app-prod"
 env                   = "prod"
 container_app_name    = "ca-fda-prod"
 container_image       = "mcr.microsoft.com/k8se/quickstart:latest"
