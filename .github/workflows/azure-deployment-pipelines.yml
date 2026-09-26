@@ -86,7 +86,7 @@ jobs:
     needs: deploy-test
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: production
+    environment: prod
     concurrency:
       group: deploy-prod
       cancel-in-progress: false
