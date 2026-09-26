@@ -12,6 +12,10 @@ When asked to update the code repository structure, only include the folders, do
 ├── data/ - Generated datasets organized by ticker, year, and quarter.
 ├── docs/ - Project documentation and reference material.
 ├── filings/ - Downloaded source financial filings.
+├── iac/ - Azure infrastructure as code.
+│   ├── bootstrap/ - Bicep templates for the resource group and Terraform state backend.
+│   ├── environments/ - Terraform root modules, one per environment.
+│   └── modules/ - Reusable Terraform modules.
 ├── src/ - Python source code for the application package.
 │   └── financial_data_agent/ - Main application package.
 │       ├── api/ - API endpoints, request models, and response models.

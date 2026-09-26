@@ -1,4 +1,4 @@
-name: CI
+name: Deployment pipeline
 
 on:
   pull_request:
