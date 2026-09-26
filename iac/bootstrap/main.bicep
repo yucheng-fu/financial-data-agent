@@ -44,6 +44,14 @@ module stateStorage 'modules/state-storage.bicep' = {
   }
 }
 
+module appRbac 'modules/app-rbac.bicep' = {
+  name: 'app-rbac-${env}'
+  scope: resourceGroup
+  params: {
+    principalId: principalId
+  }
+}
+
 resource subscriptionContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(subscription().id, principalId, contributorRoleId)
   properties: {

@@ -28,6 +28,16 @@ resource "azurerm_container_app" "this" {
   container_app_environment_id = azurerm_container_app_environment.this.id
   revision_mode                = "Single"
 
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [var.identity_id]
+  }
+
+  registry {
+    server   = var.registry_login_server
+    identity = var.identity_id
+  }
+
   template {
     min_replicas = var.min_replicas
     max_replicas = var.max_replicas
@@ -37,6 +47,15 @@ resource "azurerm_container_app" "this" {
       image  = var.image
       cpu    = var.cpu
       memory = var.memory
+
+      dynamic "env" {
+        for_each = var.env_vars
+
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
     }
   }
 
@@ -52,5 +71,12 @@ resource "azurerm_container_app" "this" {
 
   tags = {
     env = var.env
+  }
+
+  # The pipeline owns the image tag after creation, see azure-deployment-pipelines.yml.
+  lifecycle {
+    ignore_changes = [
+      template[0].container[0].image,
+    ]
   }
 }

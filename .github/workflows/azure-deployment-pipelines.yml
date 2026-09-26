@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  IMAGE_NAME: financial-data-agent
+
 jobs:
   checks:
     name: Build and test
@@ -45,14 +48,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run pytest
 
-  deploy-test:
+  deploy-iac-test:
     name: Deploy iac (test)
     needs: checks
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
     concurrency:
-      group: deploy-test
+      group: deploy-iac-test
       cancel-in-progress: false
     permissions:
       contents: read
@@ -65,6 +68,12 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_USE_OIDC: "true"
+    outputs:
+      resource_group: ${{ steps.tf.outputs.resource_group }}
+      registry: ${{ steps.tf.outputs.registry }}
+      login_server: ${{ steps.tf.outputs.login_server }}
+      app: ${{ steps.tf.outputs.app }}
+      fqdn: ${{ steps.tf.outputs.fqdn }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -81,14 +90,68 @@ jobs:
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
 
-  deploy-prod:
+      - name: Capture Terraform outputs
+        id: tf
+        run: |
+          echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "registry=$(terraform output -raw container_registry_name)" >> "$GITHUB_OUTPUT"
+          echo "login_server=$(terraform output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
+          echo "app=$(terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
+          echo "fqdn=$(terraform output -raw container_app_fqdn)" >> "$GITHUB_OUTPUT"
+
+  deploy-app-test:
+    name: Deploy app (test)
+    needs: deploy-iac-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: test
+    concurrency:
+      group: deploy-app-test
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push image
+        run: |
+          az acr build \
+            --registry "${{ needs.deploy-iac-test.outputs.registry }}" \
+            --image "$IMAGE_NAME:${{ github.sha }}" \
+            --image "$IMAGE_NAME:latest" \
+            .
+
+      - name: Deploy image to container app
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az containerapp update \
+            --name "${{ needs.deploy-iac-test.outputs.app }}" \
+            --resource-group "${{ needs.deploy-iac-test.outputs.resource_group }}" \
+            --image "${{ needs.deploy-iac-test.outputs.login_server }}/$IMAGE_NAME:${{ github.sha }}"
+
+      - name: Smoke check
+        run: >
+          curl --fail --silent --show-error
+          --retry 10 --retry-all-errors --retry-delay 15
+          "https://${{ needs.deploy-iac-test.outputs.fqdn }}/api/v1/cow"
+
+  deploy-iac-prod:
     name: Deploy iac (prod)
-    needs: deploy-test
+    needs: deploy-iac-test
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: prod
     concurrency:
-      group: deploy-prod
+      group: deploy-iac-prod
       cancel-in-progress: false
     permissions:
       contents: read
@@ -101,6 +164,12 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_USE_OIDC: "true"
+    outputs:
+      resource_group: ${{ steps.tf.outputs.resource_group }}
+      registry: ${{ steps.tf.outputs.registry }}
+      login_server: ${{ steps.tf.outputs.login_server }}
+      app: ${{ steps.tf.outputs.app }}
+      fqdn: ${{ steps.tf.outputs.fqdn }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -116,3 +185,57 @@ jobs:
 
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Capture Terraform outputs
+        id: tf
+        run: |
+          echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "registry=$(terraform output -raw container_registry_name)" >> "$GITHUB_OUTPUT"
+          echo "login_server=$(terraform output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
+          echo "app=$(terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
+          echo "fqdn=$(terraform output -raw container_app_fqdn)" >> "$GITHUB_OUTPUT"
+
+  deploy-app-prod:
+    name: Deploy app (prod)
+    needs: deploy-iac-prod
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: deploy-app-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push image
+        run: |
+          az acr build \
+            --registry "${{ needs.deploy-iac-prod.outputs.registry }}" \
+            --image "$IMAGE_NAME:${{ github.sha }}" \
+            --image "$IMAGE_NAME:latest" \
+            .
+
+      - name: Deploy image to container app
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az containerapp update \
+            --name "${{ needs.deploy-iac-prod.outputs.app }}" \
+            --resource-group "${{ needs.deploy-iac-prod.outputs.resource_group }}" \
+            --image "${{ needs.deploy-iac-prod.outputs.login_server }}/$IMAGE_NAME:${{ github.sha }}"
+
+      - name: Smoke check
+        run: >
+          curl --fail --silent --show-error
+          --retry 10 --retry-all-errors --retry-delay 15
+          "https://${{ needs.deploy-iac-prod.outputs.fqdn }}/api/v1/cow"

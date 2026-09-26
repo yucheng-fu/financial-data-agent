@@ -98,7 +98,26 @@ The code is layered with one-way dependencies: API route → service → reposit
 
 ## Deployment
 
-CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline deploys the Terraform in [iac/environments](iac/environments) to `test` and then `production`, with an approval on each GitHub environment. The target platform is Azure Container Apps.
+The API is deployed to Azure Container Apps. CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline walks `test` then `prod`, with two jobs per environment and an approval on each GitHub environment:
+
+**Deploy iac** — `terraform apply` for [iac/environments](iac/environments): container registry, the app's managed identity and its role assignments, the `filings` blob container, and the container app itself. The registry, app and FQDN names are published as job outputs.
+
+**Deploy app** — `az acr build` builds the [Dockerfile](Dockerfile) in the registry and tags it with the commit SHA, `az containerapp update` points the app at that tag to create a new revision, then a smoke check requests `/api/v1/cow` over the public FQDN.
+
+`Deploy app (test)` and `Deploy iac (prod)` both follow the test iac job and run in parallel; `Deploy app (prod)` follows the prod iac job. Prod is gated by its GitHub environment approval.
+
+Terraform owns the infrastructure; the pipeline owns the image tag. See [iac/README.md](iac/README.md) for the split, the naming conventions and the one-off bootstrap.
+
+> The database is not deployed yet, so the three import endpoints return 500 in Azure. `/docs` and `/api/v1/cow` work — the app reads `DATABASE_URL` lazily and starts fine without it.
+
+### Run the container locally
+
+```bash
+docker build -t fda-api:local .
+docker run --rm -p 8000:8000 fda-api:local
+```
+
+The API is then on <http://127.0.0.1:8000/docs>. Pass `-e DATABASE_URL=...` to reach a database; on Windows and macOS use `host.docker.internal` instead of `localhost` to reach the Compose Postgres.
 
 ## Documentation
 

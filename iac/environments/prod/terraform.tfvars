@@ -1,6 +1,9 @@
-resource_group_name   = "rg-fda-prod"
-location              = "swedencentral"
-env                   = "prod"
-container_app_name    = "ca-fda-prod"
-container_image       = "mcr.microsoft.com/k8se/quickstart:latest"
-container_target_port = 80
+resource_group_name     = "rg-fda-prod"
+location                = "swedencentral"
+env                     = "prod"
+storage_account_name    = "stfdaprod"
+filings_container_name  = "filings"
+container_registry_name = "crfdaprod"
+container_app_name      = "ca-fda-prod"
+container_image         = "mcr.microsoft.com/k8se/quickstart:latest"
+container_target_port   = 8000
