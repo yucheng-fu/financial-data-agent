@@ -101,9 +101,7 @@ class AzureBlobFilingsStorage:
         Returns:
             The name of the uploaded blob.
         """
-        self.container_client.upload_blob(
-            name=blob_name, data=content.encode("utf-8"), overwrite=True
-        )
+        self.container_client.upload_blob(name=blob_name, data=content.encode("utf-8"), overwrite=True)
         return blob_name
 
 
@@ -123,9 +121,5 @@ def build_filings_storage(data_dir: Path) -> FilingsStorage:
     from azure.storage.blob import BlobServiceClient
 
     account_url = f"https://{require_env('STORAGE_ACCOUNT_NAME')}.blob.core.windows.net"
-    service_client = BlobServiceClient(
-        account_url=account_url, credential=DefaultAzureCredential()
-    )
-    return AzureBlobFilingsStorage(
-        service_client.get_container_client(require_env("FILINGS_CONTAINER"))
-    )
+    service_client = BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
+    return AzureBlobFilingsStorage(service_client.get_container_client(require_env("FILINGS_CONTAINER")))

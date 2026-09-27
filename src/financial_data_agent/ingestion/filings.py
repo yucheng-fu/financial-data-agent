@@ -72,9 +72,7 @@ class FilingsFetcher:
         self.retry_delay_seconds = retry_delay_seconds
         self.storage = storage or build_data_storage(self.data_dir)
 
-    def fetch_filing(
-        self, ticker: str, form: list[str], quarter: int, year: int
-    ) -> tuple[str, object]:
+    def fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[str, object]:
         """Fetch an SEC filing and save it to the configured storage backend.
 
         Args:
@@ -96,18 +94,12 @@ class FilingsFetcher:
         for attempt in range(1, self.max_retries + 1):
             try:
                 company = Company(ticker.upper())
-                filings = company.get_filings(
-                    form=form, year=year, quarter=quarter, amendments=False
-                )
+                filings = company.get_filings(form=form, year=year, quarter=quarter, amendments=False)
                 if not filings:
-                    raise ValueError(
-                        f"No {form} filing found for {ticker.upper()} in {year} Q{quarter}"
-                    )
+                    raise ValueError(f"No {form} filing found for {ticker.upper()} in {year} Q{quarter}")
 
                 filing = filings[0]
-                location = self.storage.save_text(
-                    filing_blob_name(ticker, year, quarter), filing.markdown()
-                )
+                location = self.storage.save_text(filing_blob_name(ticker, year, quarter), filing.markdown())
                 return location, filing
             except TimeoutError as error:
                 last_error = error
@@ -131,9 +123,7 @@ class FilingsFetcher:
 class FilingsBackfillRunner:
     """Read S&P 500 tickers from parquet files and fetch recent SEC filings."""
 
-    def __init__(
-        self, data_dir: Path | str = "data", fetcher: FilingsFetcher | None = None
-    ) -> None:
+    def __init__(self, data_dir: Path | str = "data", fetcher: FilingsFetcher | None = None) -> None:
         """Initialize the runner.
 
         Args:
@@ -164,9 +154,7 @@ class FilingsBackfillRunner:
             frame = pl.read_parquet(parquet_file)
             if "Symbol" not in frame.columns:
                 continue
-            symbols.extend(
-                frame.get_column("Symbol").drop_nulls().cast(pl.Utf8).to_list()
-            )
+            symbols.extend(frame.get_column("Symbol").drop_nulls().cast(pl.Utf8).to_list())
         return symbols
 
     def run(
@@ -256,15 +244,9 @@ def main() -> None:
     Raises:
         SystemExit: If no parquet file with a Symbol column is found.
     """
-    parser = argparse.ArgumentParser(
-        description="Backfill SEC 10-Q filings from parquet tickers."
-    )
-    parser.add_argument(
-        "--start-year", type=int, default=2022, help="Start year to process."
-    )
-    parser.add_argument(
-        "--end-year", type=int, default=2025, help="End year to process."
-    )
+    parser = argparse.ArgumentParser(description="Backfill SEC 10-Q filings from parquet tickers.")
+    parser.add_argument("--start-year", type=int, default=2022, help="Start year to process.")
+    parser.add_argument("--end-year", type=int, default=2025, help="End year to process.")
     parser.add_argument(
         "--quarters",
         nargs="+",
@@ -298,11 +280,7 @@ def main() -> None:
         print(f"No parquet files with a Symbol column were found in {runner.data_dir}")
         raise SystemExit(1)
 
-    periods = [
-        (year, quarter)
-        for year in range(args.start_year, args.end_year + 1)
-        for quarter in quarters
-    ]
+    periods = [(year, quarter) for year in range(args.start_year, args.end_year + 1) for quarter in quarters]
     results = run_periods(
         runner,
         periods,
@@ -310,9 +288,7 @@ def main() -> None:
         max_workers=args.max_period_workers,
     )
 
-    for year, quarter, downloaded_paths, failures in sorted(
-        results, key=lambda item: (item[0], item[1])
-    ):
+    for year, quarter, downloaded_paths, failures in sorted(results, key=lambda item: (item[0], item[1])):
         for path in downloaded_paths:
             print(path)
         for symbol, error in failures:

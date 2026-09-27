@@ -33,7 +33,7 @@ def test_fetch_filing_saves_through_the_injected_storage(monkeypatch) -> None:
 
     location, returned_filing = fetcher.fetch_filing(ticker="aapl", form=["10-Q", "10-K"], quarter=2, year=2026)
 
-    blob_name = "ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2/AAPL_2026_Q2.md"
+    blob_name = "ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2.md"
     assert location == f"stored/{blob_name}"
     assert returned_filing is filing
     assert storage.saved == [(blob_name, "# Filing")]
