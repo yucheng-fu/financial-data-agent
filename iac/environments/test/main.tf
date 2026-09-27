@@ -51,6 +51,16 @@ resource "azurerm_role_assignment" "filings_blob_contributor" {
   skip_service_principal_aad_check = true
 }
 
+module "supabase_postgres" {
+  source = "../../modules/supabase-postgres"
+
+  organization_id   = var.supabase_organization_id
+  project_name      = var.supabase_project_name
+  region            = var.supabase_region
+  instance_size     = var.supabase_instance_size
+  database_password = var.supabase_db_password
+}
+
 module "container_app" {
   source = "../../modules/container-app"
 
@@ -67,6 +77,14 @@ module "container_app" {
     STORAGE_ACCOUNT_NAME = data.azurerm_storage_account.this.name
     FILINGS_CONTAINER    = azurerm_storage_container.filings.name
     AZURE_CLIENT_ID      = azurerm_user_assigned_identity.app.client_id
+  }
+
+  secrets = {
+    database-url = module.supabase_postgres.database_url
+  }
+
+  secret_env_vars = {
+    DATABASE_URL = "database-url"
   }
 
   depends_on = [azurerm_role_assignment.acr_pull]

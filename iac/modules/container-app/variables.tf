@@ -37,6 +37,19 @@ variable "env_vars" {
   default     = {}
 }
 
+variable "secrets" {
+  type        = map(string)
+  description = "Secret values keyed by secret name. Looked up rather than iterated, so the names live in var.secret_env_vars"
+  default     = {}
+  sensitive   = true
+}
+
+variable "secret_env_vars" {
+  type        = map(string)
+  description = "Environment variables backed by a secret, mapping the variable name to a key of var.secrets. Secret names must be lowercase alphanumeric or dashes"
+  default     = {}
+}
+
 variable "target_port" {
   type        = number
   description = "Port the container listens on"

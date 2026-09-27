@@ -68,12 +68,15 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_USE_OIDC: "true"
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
     outputs:
       resource_group: ${{ steps.tf.outputs.resource_group }}
       registry: ${{ steps.tf.outputs.registry }}
       login_server: ${{ steps.tf.outputs.login_server }}
       app: ${{ steps.tf.outputs.app }}
       fqdn: ${{ steps.tf.outputs.fqdn }}
+      supabase_project_ref: ${{ steps.tf.outputs.supabase_project_ref }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -98,10 +101,63 @@ jobs:
           echo "login_server=$(terraform output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
           echo "app=$(terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
           echo "fqdn=$(terraform output -raw container_app_fqdn)" >> "$GITHUB_OUTPUT"
+          echo "supabase_project_ref=$(terraform output -raw supabase_project_ref)" >> "$GITHUB_OUTPUT"
+
+  migrate-db-test:
+    name: Migrate database (test)
+    needs: deploy-iac-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: test
+    concurrency:
+      group: migrate-db-test
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_USE_OIDC: "true"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # terraform_wrapper is off because the wrapper publishes Terraform's stdout as
+      # an unmasked step output, which would expose the connection string.
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      # Read from state rather than a job output, which would not be masked either.
+      - name: Read database URL from Terraform state
+        working-directory: iac/environments/test
+        run: |
+          terraform init -input=false
+          url="$(terraform output -raw database_url)"
+          echo "::add-mask::$url"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # migrations/env.py requires DATABASE_URL. Its load_dotenv() call finds no
+      # .env here, since .env is gitignored, so the value above is the only source.
+      - name: Alembic upgrade head
+        working-directory: src/financial_data_agent
+        run: uv run alembic upgrade head
 
   deploy-app-test:
     name: Deploy app (test)
-    needs: deploy-iac-test
+    needs: [deploy-iac-test, migrate-db-test]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
@@ -171,12 +227,15 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_USE_OIDC: "true"
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
     outputs:
       resource_group: ${{ steps.tf.outputs.resource_group }}
       registry: ${{ steps.tf.outputs.registry }}
       login_server: ${{ steps.tf.outputs.login_server }}
       app: ${{ steps.tf.outputs.app }}
       fqdn: ${{ steps.tf.outputs.fqdn }}
+      supabase_project_ref: ${{ steps.tf.outputs.supabase_project_ref }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -201,10 +260,63 @@ jobs:
           echo "login_server=$(terraform output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
           echo "app=$(terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
           echo "fqdn=$(terraform output -raw container_app_fqdn)" >> "$GITHUB_OUTPUT"
+          echo "supabase_project_ref=$(terraform output -raw supabase_project_ref)" >> "$GITHUB_OUTPUT"
+
+  migrate-db-prod:
+    name: Migrate database (prod)
+    needs: deploy-iac-prod
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: migrate-db-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_USE_OIDC: "true"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # terraform_wrapper is off because the wrapper publishes Terraform's stdout as
+      # an unmasked step output, which would expose the connection string.
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      # Read from state rather than a job output, which would not be masked either.
+      - name: Read database URL from Terraform state
+        working-directory: iac/environments/prod
+        run: |
+          terraform init -input=false
+          url="$(terraform output -raw database_url)"
+          echo "::add-mask::$url"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # migrations/env.py requires DATABASE_URL. Its load_dotenv() call finds no
+      # .env here, since .env is gitignored, so the value above is the only source.
+      - name: Alembic upgrade head
+        working-directory: src/financial_data_agent
+        run: uv run alembic upgrade head
 
   deploy-app-prod:
     name: Deploy app (prod)
-    needs: deploy-iac-prod
+    needs: [deploy-iac-prod, migrate-db-prod]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: prod

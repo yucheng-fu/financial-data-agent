@@ -40,3 +40,30 @@ variable "container_image" {
 variable "container_target_port" {
   type = number
 }
+
+variable "supabase_organization_id" {
+  type        = string
+  description = "Supabase organization slug that owns the project"
+}
+
+variable "supabase_project_name" {
+  type        = string
+  description = "Supabase project name, unique within the organization"
+}
+
+variable "supabase_region" {
+  type        = string
+  description = "Supabase region, independent of the Azure location"
+}
+
+variable "supabase_instance_size" {
+  type        = string
+  description = "Paid plan instance size. Null leaves the plan default, which the free tier requires"
+  default     = null
+}
+
+variable "supabase_db_password" {
+  type        = string
+  description = "Password for the Supabase project database, supplied as TF_VAR_supabase_db_password"
+  sensitive   = true
+}

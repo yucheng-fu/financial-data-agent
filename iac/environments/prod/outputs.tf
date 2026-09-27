@@ -21,3 +21,19 @@ output "container_app_fqdn" {
 output "filings_container_name" {
   value = azurerm_storage_container.filings.name
 }
+
+output "supabase_project_ref" {
+  value = module.supabase_postgres.project_ref
+}
+
+output "pooler_urls" {
+  value     = module.supabase_postgres.pooler_urls
+  sensitive = true
+}
+
+# Read inside the migration job with `terraform output -raw`. Deliberately not
+# promoted to a workflow job output, which would not be masked.
+output "database_url" {
+  value     = module.supabase_postgres.database_url
+  sensitive = true
+}
