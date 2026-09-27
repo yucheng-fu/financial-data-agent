@@ -27,11 +27,18 @@ data "supabase_pooler" "this" {
 }
 
 locals {
-  # Supavisor serves session mode on 5432 and transaction mode on 6543 of the same
-  # host. Session mode is required because Alembic DDL uses prepared statements, and
-  # the pooler is required at all because the direct host is IPv6 only on the free
-  # tier while GitHub hosted runners are IPv4 only.
-  session_pooler_url = data.supabase_pooler.this.url["session"]
+  # The API returns only the project's configured pool mode, so this map has a single
+  # entry, keyed "transaction" by default. Indexing by name is therefore not safe.
+  # values() is ordered by key, so [0] picks "session" if a future project ever
+  # reports both.
+  raw_pooler_url = values(data.supabase_pooler.this.url)[0]
+
+  # Supavisor serves both modes on the same host, session on 5432 and transaction on
+  # 6543, so rewriting the port is what selects session mode. It is a no-op when the
+  # URL is already a session one. Session mode is required because Alembic DDL uses
+  # prepared statements, and the pooler is required at all because the direct host is
+  # IPv6 only on the free tier while GitHub hosted runners are IPv4 only.
+  session_pooler_url = replace(local.raw_pooler_url, ":6543/", ":5432/")
 
   # psycopg needs the SQLAlchemy dialect prefix rather than the bare postgres://
   # scheme, and the Management API redacts the password in the connection string.

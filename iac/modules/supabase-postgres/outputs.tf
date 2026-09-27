@@ -18,4 +18,9 @@ output "database_url" {
     condition     = !strcontains(local.database_url, "YOUR-PASSWORD")
     error_message = "The pooler connection string did not contain the [YOUR-PASSWORD] placeholder, so no password was substituted. Inspect the pooler_urls output and adjust the substitution in main.tf."
   }
+
+  precondition {
+    condition     = strcontains(local.database_url, ":5432/")
+    error_message = "The composed URL is not on the session pooler port 5432, so Alembic DDL would fail. Inspect the pooler_urls output and adjust the port rewrite in main.tf."
+  }
 }
