@@ -22,10 +22,10 @@ jobs:
       cancel-in-progress: true
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
         with:
           python-version: "3.11"
           enable-cache: true
@@ -50,14 +50,14 @@ jobs:
 
       - name: Set up Docker Buildx
         if: ${{ !cancelled() }}
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # push: false — this only proves the Dockerfile still builds. The deploy jobs
       # build and push the image they ship, but they are skipped on pull requests, so
       # without this a broken Dockerfile would first surface after iac has applied.
       - name: Build image
         if: ${{ !cancelled() }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
@@ -96,10 +96,10 @@ jobs:
       supabase_project_ref: ${{ steps.tf.outputs.supabase_project_ref }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
 
       - name: Terraform init
         run: terraform init -input=false
@@ -139,12 +139,12 @@ jobs:
       ARM_USE_OIDC: "true"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # terraform_wrapper is off because the wrapper publishes Terraform's stdout as
       # an unmasked step output, which would expose the connection string.
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
@@ -158,7 +158,7 @@ jobs:
           echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
         with:
           python-version: "3.11"
           enable-cache: true
@@ -186,23 +186,23 @@ jobs:
       id-token: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to container registry
         run: az acr login --name "${{ needs.deploy-iac-test.outputs.registry }}"
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -255,10 +255,10 @@ jobs:
       supabase_project_ref: ${{ steps.tf.outputs.supabase_project_ref }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
 
       - name: Terraform init
         run: terraform init -input=false
@@ -298,12 +298,12 @@ jobs:
       ARM_USE_OIDC: "true"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # terraform_wrapper is off because the wrapper publishes Terraform's stdout as
       # an unmasked step output, which would expose the connection string.
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false
 
@@ -317,7 +317,7 @@ jobs:
           echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10
         with:
           python-version: "3.11"
           enable-cache: true
@@ -345,23 +345,23 @@ jobs:
       id-token: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to container registry
         run: az acr login --name "${{ needs.deploy-iac-prod.outputs.registry }}"
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
