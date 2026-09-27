@@ -122,13 +122,20 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to container registry
+        run: az acr login --name "${{ needs.deploy-iac-test.outputs.registry }}"
+
       - name: Build and push image
-        run: |
-          az acr build \
-            --registry "${{ needs.deploy-iac-test.outputs.registry }}" \
-            --image "$IMAGE_NAME:${{ github.sha }}" \
-            --image "$IMAGE_NAME:latest" \
-            .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ needs.deploy-iac-test.outputs.login_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ needs.deploy-iac-test.outputs.login_server }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Deploy image to container app
         run: |
@@ -218,13 +225,20 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to container registry
+        run: az acr login --name "${{ needs.deploy-iac-prod.outputs.registry }}"
+
       - name: Build and push image
-        run: |
-          az acr build \
-            --registry "${{ needs.deploy-iac-prod.outputs.registry }}" \
-            --image "$IMAGE_NAME:${{ github.sha }}" \
-            --image "$IMAGE_NAME:latest" \
-            .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ needs.deploy-iac-prod.outputs.login_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ needs.deploy-iac-prod.outputs.login_server }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Deploy image to container app
         run: |
