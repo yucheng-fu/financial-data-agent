@@ -219,3 +219,12 @@ __marimo__/
 
 # folders
 /data
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+tfplan
+*.tfplan
+crash.log
+crash.*.log

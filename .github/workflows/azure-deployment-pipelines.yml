@@ -1,4 +1,4 @@
-name: CI
+name: Deployment pipeline
 
 on:
   pull_request:
@@ -10,19 +10,22 @@ on:
 permissions:
   contents: read
 
+env:
+  IMAGE_NAME: financial-data-agent
+
 jobs:
   checks:
-    name: Build and test
+    name: Lint, build and test
     runs-on: ubuntu-latest
     concurrency:
       group: checks-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.11"
           enable-cache: true
@@ -45,14 +48,31 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run pytest
 
-  deploy-test:
+      - name: Set up Docker Buildx
+        if: ${{ !cancelled() }}
+        uses: docker/setup-buildx-action@v4
+
+      # push: false — this only proves the Dockerfile still builds. The deploy jobs
+      # build and push the image they ship, but they are skipped on pull requests, so
+      # without this a broken Dockerfile would first surface after iac has applied.
+      - name: Build image
+        if: ${{ !cancelled() }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-iac-test:
     name: Deploy iac (test)
     needs: checks
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
     concurrency:
-      group: deploy-test
+      group: deploy-iac-test
       cancel-in-progress: false
     permissions:
       contents: read
@@ -65,12 +85,21 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_USE_OIDC: "true"
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    outputs:
+      resource_group: ${{ steps.tf.outputs.resource_group }}
+      registry: ${{ steps.tf.outputs.registry }}
+      login_server: ${{ steps.tf.outputs.login_server }}
+      app: ${{ steps.tf.outputs.app }}
+      fqdn: ${{ steps.tf.outputs.fqdn }}
+      supabase_project_ref: ${{ steps.tf.outputs.supabase_project_ref }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
 
       - name: Terraform init
         run: terraform init -input=false
@@ -81,14 +110,128 @@ jobs:
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
 
-  deploy-prod:
-    name: Deploy iac (prod)
-    needs: deploy-test
+      - name: Capture Terraform outputs
+        id: tf
+        run: |
+          echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "registry=$(terraform output -raw container_registry_name)" >> "$GITHUB_OUTPUT"
+          echo "login_server=$(terraform output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
+          echo "app=$(terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
+          echo "fqdn=$(terraform output -raw container_app_fqdn)" >> "$GITHUB_OUTPUT"
+          echo "supabase_project_ref=$(terraform output -raw supabase_project_ref)" >> "$GITHUB_OUTPUT"
+
+  migrate-db-test:
+    name: Migrate database (test)
+    needs: deploy-iac-test
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: production
+    environment: test
     concurrency:
-      group: deploy-prod
+      group: migrate-db-test
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_USE_OIDC: "true"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # terraform_wrapper is off because the wrapper publishes Terraform's stdout as
+      # an unmasked step output, which would expose the connection string.
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      # Read from state rather than a job output, which would not be masked either.
+      - name: Read database URL from Terraform state
+        working-directory: iac/environments/test
+        run: |
+          terraform init -input=false
+          url="$(terraform output -raw database_url)"
+          echo "::add-mask::$url"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # migrations/env.py requires DATABASE_URL. Its load_dotenv() call finds no
+      # .env here, since .env is gitignored, so the value above is the only source.
+      - name: Alembic upgrade head
+        working-directory: src/financial_data_agent
+        run: uv run alembic upgrade head
+
+  deploy-app-test:
+    name: Deploy app (test)
+    needs: [deploy-iac-test, migrate-db-test]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: test
+    concurrency:
+      group: deploy-app-test
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to container registry
+        run: az acr login --name "${{ needs.deploy-iac-test.outputs.registry }}"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ needs.deploy-iac-test.outputs.login_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ needs.deploy-iac-test.outputs.login_server }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy image to container app
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az containerapp update \
+            --name "${{ needs.deploy-iac-test.outputs.app }}" \
+            --resource-group "${{ needs.deploy-iac-test.outputs.resource_group }}" \
+            --image "${{ needs.deploy-iac-test.outputs.login_server }}/$IMAGE_NAME:${{ github.sha }}"
+
+      - name: Smoke check
+        run: >
+          curl --fail --silent --show-error
+          --retry 10 --retry-all-errors --retry-delay 15
+          "https://${{ needs.deploy-iac-test.outputs.fqdn }}/api/v1/cow"
+
+  deploy-iac-prod:
+    name: Deploy iac (prod)
+    needs: deploy-iac-test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: deploy-iac-prod
       cancel-in-progress: false
     permissions:
       contents: read
@@ -101,12 +244,21 @@ jobs:
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_USE_OIDC: "true"
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    outputs:
+      resource_group: ${{ steps.tf.outputs.resource_group }}
+      registry: ${{ steps.tf.outputs.registry }}
+      login_server: ${{ steps.tf.outputs.login_server }}
+      app: ${{ steps.tf.outputs.app }}
+      fqdn: ${{ steps.tf.outputs.fqdn }}
+      supabase_project_ref: ${{ steps.tf.outputs.supabase_project_ref }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
 
       - name: Terraform init
         run: terraform init -input=false
@@ -116,3 +268,117 @@ jobs:
 
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Capture Terraform outputs
+        id: tf
+        run: |
+          echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "registry=$(terraform output -raw container_registry_name)" >> "$GITHUB_OUTPUT"
+          echo "login_server=$(terraform output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
+          echo "app=$(terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
+          echo "fqdn=$(terraform output -raw container_app_fqdn)" >> "$GITHUB_OUTPUT"
+          echo "supabase_project_ref=$(terraform output -raw supabase_project_ref)" >> "$GITHUB_OUTPUT"
+
+  migrate-db-prod:
+    name: Migrate database (prod)
+    needs: deploy-iac-prod
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: migrate-db-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_USE_OIDC: "true"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # terraform_wrapper is off because the wrapper publishes Terraform's stdout as
+      # an unmasked step output, which would expose the connection string.
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      # Read from state rather than a job output, which would not be masked either.
+      - name: Read database URL from Terraform state
+        working-directory: iac/environments/prod
+        run: |
+          terraform init -input=false
+          url="$(terraform output -raw database_url)"
+          echo "::add-mask::$url"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # migrations/env.py requires DATABASE_URL. Its load_dotenv() call finds no
+      # .env here, since .env is gitignored, so the value above is the only source.
+      - name: Alembic upgrade head
+        working-directory: src/financial_data_agent
+        run: uv run alembic upgrade head
+
+  deploy-app-prod:
+    name: Deploy app (prod)
+    needs: [deploy-iac-prod, migrate-db-prod]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: deploy-app-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to container registry
+        run: az acr login --name "${{ needs.deploy-iac-prod.outputs.registry }}"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ needs.deploy-iac-prod.outputs.login_server }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ needs.deploy-iac-prod.outputs.login_server }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy image to container app
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az containerapp update \
+            --name "${{ needs.deploy-iac-prod.outputs.app }}" \
+            --resource-group "${{ needs.deploy-iac-prod.outputs.resource_group }}" \
+            --image "${{ needs.deploy-iac-prod.outputs.login_server }}/$IMAGE_NAME:${{ github.sha }}"
+
+      - name: Smoke check
+        run: >
+          curl --fail --silent --show-error
+          --retry 10 --retry-all-errors --retry-delay 15
+          "https://${{ needs.deploy-iac-prod.outputs.fqdn }}/api/v1/cow"

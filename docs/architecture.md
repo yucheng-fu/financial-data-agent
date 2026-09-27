@@ -40,7 +40,7 @@ flowchart TD
         chunker["Text Chunker & Embedder"]
     end
 
-    subgraph Storage["PostgreSQL Instance"]
+    subgraph Storage["PostgreSQL Instance (Supabase)"]
         postgres[("Relational DB\n(Financial Metrics)")]
         pgvector[("pgvector\n(Document Embeddings)")]
     end

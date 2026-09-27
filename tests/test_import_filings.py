@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -34,7 +33,7 @@ def test_import_filings_downloads_filing(monkeypatch) -> None:
 
     fake_document_repository = FakeDocumentRepository(session=object())
 
-    def fake_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[Path, object]:
+    def fake_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[str, object]:
         assert ticker == "AAPL"
         assert form == ["10-Q", "10-K"]
         assert quarter == 2
@@ -45,7 +44,7 @@ def test_import_filings_downloads_filing(monkeypatch) -> None:
             filing_date="2026-05-01T00:00:00",
             period_of_report="2026-03-31T00:00:00",
         )
-        return Path("data/ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2.md"), filing
+        return "ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2/AAPL_2026_Q2.md", filing
 
     monkeypatch.setattr(
         filing_import.FilingsFetcher,
@@ -70,7 +69,7 @@ def test_import_filings_downloads_filing(monkeypatch) -> None:
         "ticker": "AAPL",
         "year": 2026,
         "quarter": 2,
-        "file_path": "data/ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2.md",
+        "file_path": "ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2/AAPL_2026_Q2.md",
     }
     assert fake_document_repository.created_document == DocumentDTO(
         company_id=42,
@@ -80,7 +79,7 @@ def test_import_filings_downloads_filing(monkeypatch) -> None:
         quarter=2,
         filing_date=datetime(2026, 5, 1, 0, 0),
         period_of_report=datetime(2026, 3, 31, 0, 0),
-        raw_document_path="data/ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2.md",
+        raw_document_path="ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2/AAPL_2026_Q2.md",
         supplied_fields=frozenset(
             {
                 "company_id",
@@ -124,7 +123,7 @@ def test_import_filings_rejects_missing_company_before_download(monkeypatch) -> 
             self.create_called = True
             return object()
 
-    def fail_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> Path:
+    def fail_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[str, object]:
         raise AssertionError("fetch_filing should not be called when the company is missing")
 
     fake_document_repository = FakeDocumentRepository(session=object())
@@ -168,7 +167,7 @@ def test_import_filings_rejects_missing_sec_filing(monkeypatch) -> None:
             self.create_called = True
             return object()
 
-    def fake_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> Path:
+    def fake_fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[str, object]:
         raise ValueError("No 10-Q filing found for AAPL in 2026 Q2")
 
     fake_document_repository = FakeDocumentRepository(session=object())

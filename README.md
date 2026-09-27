@@ -1,4 +1,4 @@
-# financial-data-agent
+# Financial Data Agent
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
@@ -37,24 +37,33 @@ uv sync
 
 ### Configuration
 
-Create a `.env` file in the project root:
+Copy [.env.example](.env.example) to `.env` and set your own password:
 
-```env
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=change-me
-POSTGRES_DB=financial_data_agent
-DATABASE_URL=postgresql+psycopg://postgres:change-me@localhost:5432/financial_data_agent
+```bash
+cp .env.example .env
 ```
+
+| Variable | Used by |
+| --- | --- |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | the local Postgres container in [db/docker-compose.yaml](src/financial_data_agent/db/docker-compose.yaml) |
+| `DATABASE_URL` | [db/database.py](src/financial_data_agent/db/database.py) and [migrations/env.py](src/financial_data_agent/migrations/env.py); must match the three above |
+
+`.env` is gitignored and is local development only. In `test` and `prod`, Terraform provisions the Supabase project and passes `DATABASE_URL` to the container app as a secret — see [docs/database.md](docs/database.md).
 
 ### Database
 
 ```bash
-docker compose up -d
-cd src/financial_data_agent
+cd src/financial_data_agent/db
+docker compose --env-file ../../../.env up -d
+cd ..
 alembic upgrade head
 ```
 
+`--env-file` is required — see [db/README.md](src/financial_data_agent/db/README.md).
+
 ### Run the API
+
+From the repository root:
 
 ```bash
 uv run fastapi dev src/financial_data_agent/api/main.py
@@ -98,8 +107,21 @@ The code is layered with one-way dependencies: API route → service → reposit
 
 ## Deployment
 
-CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline deploys the Terraform in [iac/environments](iac/environments) to `test` and then `production`, with an approval on each GitHub environment. The target platform is Azure Container Apps.
+The API is deployed to Azure Container Apps, with Postgres on Supabase. CI runs lint, type checks, tests and an image build on every pull request. On merge to `main`, the pipeline walks `test` then `prod`, applying the infrastructure, migrating the database and then deploying the image, with an approval on each GitHub environment.
+
+Terraform owns the infrastructure, the pipeline owns the image tag, and `migrations/versions/` owns the schema. See [iac/README.md](iac/README.md) to provision an environment and [docs/infrastructure.md](docs/infrastructure.md) for the pipeline and the ownership split.
+
+### Run the container locally
+
+```bash
+docker build -t fda-api:local .
+docker run --rm -p 8000:8000 fda-api:local
+```
+
+The API is then on <http://127.0.0.1:8000/docs>. Pass `-e DATABASE_URL=...` to reach a database; on Windows and macOS use `host.docker.internal` instead of `localhost` to reach the Compose Postgres.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
+- [Architecture](docs/architecture.md) — target design, components and the query pipeline
+- [Infrastructure](docs/infrastructure.md) — Azure resources, resource ownership and the deployment pipeline
+- [Database](docs/database.md) — local and deployed Postgres, migrations and the Supabase connection string
