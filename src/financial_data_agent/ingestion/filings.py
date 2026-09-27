@@ -8,6 +8,7 @@ import polars as pl
 from edgar import Company, set_identity
 
 from financial_data_agent.constants import SEC_IDENTITY
+from financial_data_agent.ingestion.storage import DataStorage, build_data_storage, default_data_dir
 
 
 def parse_quarters(raw_quarters: list[str]) -> list[int]:
@@ -25,13 +26,20 @@ def parse_quarters(raw_quarters: list[str]) -> list[int]:
     return quarters
 
 
-def _default_data_dir() -> Path:
-    """Return the repository-level data directory.
+def filing_blob_name(ticker: str, year: int, quarter: int) -> str:
+    """Build the partitioned location of a filing markdown file.
+
+    Args:
+        ticker: Public company ticker symbol.
+        year: Filing year.
+        quarter: Calendar quarter, from 1 to 4.
 
     Returns:
-        Path to the data directory.
+        The relative filing location, using forward slashes.
     """
-    return Path(__file__).resolve().parents[3] / "data"
+    symbol = ticker.upper()
+    file_stem = f"{symbol}_{year}_Q{quarter}"
+    return f"ticker={symbol}/year={year}/quarter=Q{quarter}/{file_stem}/{file_stem}.md"
 
 
 class FilingsFetcher:
@@ -43,6 +51,7 @@ class FilingsFetcher:
         data_dir: Path | str | None = None,
         max_retries: int = 3,
         retry_delay_seconds: float = 2.0,
+        storage: DataStorage | None = None,
     ) -> None:
         """Initialize the fetcher.
 
@@ -51,14 +60,16 @@ class FilingsFetcher:
             data_dir: Root directory used to store downloaded filings.
             max_retries: Maximum number of attempts for transient failures.
             retry_delay_seconds: Delay between retry attempts in seconds.
+            storage: Optional data storage backend.
         """
         set_identity(identity)
-        self.data_dir = Path(data_dir) if data_dir is not None else _default_data_dir()
+        self.data_dir = Path(data_dir) if data_dir is not None else default_data_dir()
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
+        self.storage = storage or build_data_storage(self.data_dir)
 
-    def fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[Path, object]:
-        """Fetch an SEC filing and save it to disk.
+    def fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[str, object]:
+        """Fetch an SEC filing and save it to the configured storage backend.
 
         Args:
             ticker: Public company ticker symbol.
@@ -67,7 +78,7 @@ class FilingsFetcher:
             year: Filing year.
 
         Returns:
-            A tuple containing the saved filing markdown file path and the filing.
+            A tuple containing the filing location, a disk path or blob name, and the filing.
 
         Raises:
             ValueError: If quarter is outside the range 1 to 4 or no filing is found.
@@ -84,18 +95,8 @@ class FilingsFetcher:
                     raise ValueError(f"No {form} filing found for {ticker.upper()} in {year} Q{quarter}")
 
                 filing = filings[0]
-                target_dir = (
-                    self.data_dir
-                    / f"ticker={ticker.upper()}"
-                    / f"year={year}"
-                    / f"quarter=Q{quarter}"
-                    / f"{ticker.upper()}_{year}_Q{quarter}"
-                )
-                target_dir.mkdir(parents=True, exist_ok=True)
-
-                file_path = target_dir / f"{ticker.upper()}_{year}_Q{quarter}.md"
-                file_path.write_text(filing.markdown(), encoding="utf-8")
-                return file_path, filing
+                location = self.storage.save_text(filing_blob_name(ticker, year, quarter), filing.markdown())
+                return location, filing
             except TimeoutError as error:
                 last_error = error
             except Exception as error:
@@ -158,7 +159,7 @@ class FilingsBackfillRunner:
         year: int | None = None,
         quarter: int | None = None,
         max_workers: int = 5,
-    ) -> tuple[list[Path], list[tuple[str, str]]]:
+    ) -> tuple[list[str], list[tuple[str, str]]]:
         """Fetch filings for the first `limit` companies found in parquet files.
 
         Args:
@@ -168,7 +169,7 @@ class FilingsBackfillRunner:
             max_workers: Maximum number of concurrent fetch operations.
 
         Returns:
-            A tuple containing downloaded filing paths and failure records.
+            A tuple containing downloaded filing locations and failure records.
         """
         resolved_year, resolved_quarter = self._current_period()
         if year is not None:
@@ -177,7 +178,7 @@ class FilingsBackfillRunner:
             resolved_quarter = quarter
 
         symbols = self._load_symbols()[:limit]
-        downloaded_paths: list[Path] = []
+        downloaded_paths: list[str] = []
         failures: list[tuple[str, str]] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_symbol = {
@@ -205,7 +206,7 @@ def run_periods(
     periods: list[tuple[int, int]],
     limit: int = 5,
     max_workers: int = 4,
-) -> list[tuple[int, int, list[Path], list[tuple[str, str]]]]:
+) -> list[tuple[int, int, list[str], list[tuple[str, str]]]]:
     """Run the filings backfill for multiple year and quarter combinations.
 
     Args:
@@ -215,9 +216,9 @@ def run_periods(
         max_workers: Maximum number of concurrent period jobs.
 
     Returns:
-        Period results including downloaded paths and failure records.
+        Period results including downloaded filing locations and failure records.
     """
-    results: list[tuple[int, int, list[Path], list[tuple[str, str]]]] = []
+    results: list[tuple[int, int, list[str], list[tuple[str, str]]]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_period = {
             executor.submit(runner.run, limit=limit, year=year, quarter=quarter): (

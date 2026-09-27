@@ -51,7 +51,7 @@ Layered, with strict one-way dependencies: **api/v1 route → services → repos
 
 - `api/v1/*` - Thin FastAPI routes. They take a `Session` via `Depends(get_session)`, call a service, and translate service exceptions (e.g. `CompanyNotFoundError`, `FilingNotFoundError`) into `HTTPException`. Request/response pydantic models live in `api/requests/` and `api/responses/`. New routers must be registered in `api/router.py`.
 - `services/` - Business logic (`company_import`, `filing_import`, `financial_metrics_import`). Services build their own repositories from the session and take an optional injected fetcher (`SP500Fetcher`, `FilingsFetcher`) for testability. Each service defines its own domain exceptions.
-- `ingestion/` - External I/O only: `sp500.py` scrapes the S&P 500 list from Wikipedia (Polars DataFrame, cached to `data/s&p500.parquet`); `filings.py` uses `edgartools` to download 10-Q/10-K filings as markdown under `data/ticker=<T>/...` and also has a CLI-style bulk backfill (threaded, by year/quarter).
+- `ingestion/` - External I/O only: `sp500.py` scrapes the S&P 500 list from Wikipedia (Polars DataFrame, cached as `s&p500.parquet`); `filings.py` uses `edgartools` to download 10-Q/10-K filings as markdown under `ticker=<T>/year=<Y>/quarter=Q<q>/...` and also has a CLI-style bulk backfill (threaded, by year/quarter); `storage.py` decides where both land — local disk under `data/` when `ENVIRONMENT=local`, otherwise the Azure `filings` blob container via `DefaultAzureCredential`. Both fetchers take an optional injected `DataStorage` (`save_text` / `save_bytes`), and `fetch_filing` returns the location as a string (disk path locally, blob name in Azure) which is stored in `documents.raw_document_path`.
 - `db/` - SQLAlchemy 2.0 models (`Company`, `Document`, `FinancialMetric`, with `TimestampMixin`), repositories (session-based CRUD; they `commit()` per operation), pydantic `schemas/` for API payloads, and **DTOs** (`db/DTO/`) that sit between schemas/services and models. DTOs carry a `supplied_fields` frozenset so updates only touch fields that were explicitly provided (partial-update semantics); `to_model_kwargs()` produces the model constructor args. When building a DTO in a service, set `supplied_fields` to every field you want written.
 - `migrations/` - Alembic; `env.py` imports `financial_data_agent.db.models` so autogenerate sees all models. Add new models to `db/models/__init__.py`.
 
@@ -70,7 +70,7 @@ Uses `uv` (Python >=3.11).
 - Migrations (run from `src/financial_data_agent/`, where the working `alembic.ini` and `migrations/` live): `alembic revision --autogenerate -m "name"` then `alembic upgrade head`
 - API: `uv run fastapi dev src/financial_data_agent/api/main.py`
 
-`.env` must define `DATABASE_URL` (used by both `db/database.py` and `migrations/env.py`).
+`.env` must define `DATABASE_URL` (used by both `db/database.py` and `migrations/env.py`). `ENVIRONMENT` selects the filings storage backend and defaults to `local`; Terraform sets it to `test`/`prod` alongside `STORAGE_ACCOUNT_NAME`, `FILINGS_CONTAINER` and `AZURE_CLIENT_ID`, which `config.py` requires in those environments.
 
 ### Agent guardrails
 - Keep test updates close to behavior changes and use explicit test names describing what is validated.

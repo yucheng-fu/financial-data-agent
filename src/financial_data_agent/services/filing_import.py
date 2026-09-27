@@ -53,7 +53,7 @@ class FilingImportService:
             quarter: Calendar quarter, from 1 to 4.
 
         Returns:
-            The normalized ticker, period, and path of the saved filing.
+            The normalized ticker, period, and location of the saved filing.
 
         Raises:
             CompanyNotFoundError: If the company does not exist in the database.
@@ -78,7 +78,7 @@ class FilingImportService:
                 quarter=quarter,
                 filing_date=_parse_date(filing.filing_date),
                 period_of_report=_parse_date(filing.period_of_report),
-                raw_document_path=file_path.as_posix(),
+                raw_document_path=file_path,
                 supplied_fields=frozenset(
                     {
                         "company_id",
@@ -93,7 +93,7 @@ class FilingImportService:
                 ),
             )
         )
-        return FilingImportResult(normalized_ticker, year, quarter, file_path.as_posix())
+        return FilingImportResult(normalized_ticker, year, quarter, file_path)
 
 
 def _parse_date(value: object) -> object:

@@ -9,6 +9,15 @@ from financial_data_agent.db.database import get_session
 
 
 @pytest.fixture(autouse=True)
+def local_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force the local environment so tests never reach for Azure Blob Storage.
+
+    Tests covering deployed behavior set `ENVIRONMENT` themselves.
+    """
+    monkeypatch.setenv("ENVIRONMENT", "local")
+
+
+@pytest.fixture(autouse=True)
 def stub_db_session() -> Generator[None, None, None]:
     """Replace the `get_session` dependency so API tests never need a database.
 
