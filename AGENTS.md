@@ -34,6 +34,24 @@ When asked to update the code repository structure, only include the folders, do
 └── tests/ - Unit tests.
 ```
 
+### Documentation
+A README answers *how do I run this*. A design document in `docs/` answers *why is it built this way*. Keep the two separate.
+
+**READMEs** contain only a one-sentence statement of purpose, prerequisites, copy-pasteable commands, and a link to the relevant design document. Command blocks may take up most of the length, but the prose around them should be readable in under a minute — if a README grows past roughly 50 lines, something in it belongs in `docs/`. `src/financial_data_agent/api/README.md` is the reference example.
+
+Move to `docs/` rather than writing it in a README:
+- The rationale for a design decision, and the failure mode you hit if you get it wrong.
+- Ownership matrices, naming-convention tables and secret-provenance tables.
+- Comparisons of alternatives that were considered and rejected.
+- Pipeline and workflow walkthroughs.
+
+The command itself always stays in the README even when the reason for a flag moves out. `docker compose --env-file ../../../.env up -d` belongs in `db/README.md`; the explanation of why `--env-file` is mandatory belongs in `docs/database.md`.
+
+Heading levels descend without skipping: `#` for the title, then `##` for sections.
+
+State each fact in exactly one place. If it lives in `docs/`, link to it instead of restating it.
+
+**Design documents** in `docs/` follow the style of `docs/architecture.md`: a `# Financial Data Agent - <Topic>` title, numbered `##` sections, terse declarative prose, and Mermaid for diagrams. Number sections consecutively — `architecture.md` currently skips from 1 to 3, which is a mistake rather than a convention.
 
 ### Code style 
 Follow the standards defined in the `pyproject.toml` file.
@@ -66,7 +84,7 @@ Uses `uv` (Python >=3.11).
 - Run all tests: `uv run pytest`; a single test: `uv run pytest tests/test_import_filings.py::test_import_filings_downloads_filing`
 - Lint and format (ruff): `uv run ruff check .` and `uv run ruff format .`
 - Type check (pyrefly): `uv run pyrefly check`
-- Postgres (pgvector): `docker compose up -d` (reads `POSTGRES_USER/PASSWORD/DB` from `.env`)
+- Postgres (pgvector): from `src/financial_data_agent/db/`, `docker compose --env-file ../../../.env up -d` (reads `POSTGRES_USER/PASSWORD/DB` from `.env`; `--env-file` is required)
 - Migrations (run from `src/financial_data_agent/`, where the working `alembic.ini` and `migrations/` live): `alembic revision --autogenerate -m "name"` then `alembic upgrade head`
 - API: `uv run fastapi dev src/financial_data_agent/api/main.py`
 

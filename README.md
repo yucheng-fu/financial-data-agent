@@ -48,17 +48,22 @@ cp .env.example .env
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | the local Postgres container in [db/docker-compose.yaml](src/financial_data_agent/db/docker-compose.yaml) |
 | `DATABASE_URL` | [db/database.py](src/financial_data_agent/db/database.py) and [migrations/env.py](src/financial_data_agent/migrations/env.py); must match the three above |
 
-`.env` is gitignored and is local development only. In `test` and `prod`, Terraform provisions the Supabase project and passes `DATABASE_URL` to the container app as a secret — see [iac/README.md](iac/README.md).
+`.env` is gitignored and is local development only. In `test` and `prod`, Terraform provisions the Supabase project and passes `DATABASE_URL` to the container app as a secret — see [docs/database.md](docs/database.md).
 
 ### Database
 
 ```bash
-docker compose up -d
-cd src/financial_data_agent
+cd src/financial_data_agent/db
+docker compose --env-file ../../../.env up -d
+cd ..
 alembic upgrade head
 ```
 
+`--env-file` is required — see [db/README.md](src/financial_data_agent/db/README.md).
+
 ### Run the API
+
+From the repository root:
 
 ```bash
 uv run fastapi dev src/financial_data_agent/api/main.py
@@ -102,17 +107,9 @@ The code is layered with one-way dependencies: API route → service → reposit
 
 ## Deployment
 
-The API is deployed to Azure Container Apps, with Postgres on Supabase. CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline walks `test` then `prod`, with three jobs per environment and an approval on each GitHub environment:
+The API is deployed to Azure Container Apps, with Postgres on Supabase. CI runs lint, type checks, tests and an image build on every pull request. On merge to `main`, the pipeline walks `test` then `prod`, applying the infrastructure, migrating the database and then deploying the image, with an approval on each GitHub environment.
 
-**Deploy iac** — `terraform apply` for [iac/environments](iac/environments): container registry, the app's managed identity and its role assignments, the `filings` blob container, the Supabase Postgres project, and the container app itself. The registry, app and FQDN names are published as job outputs.
-
-**Migrate database** — reads the connection string out of Terraform state and runs `alembic upgrade head` against that environment's Supabase project. The app deploy is gated on it, so a new image never reaches a database that is behind it.
-
-**Deploy app** — `az acr build` builds the [Dockerfile](Dockerfile) in the registry and tags it with the commit SHA, `az containerapp update` points the app at that tag to create a new revision, then a smoke check requests `/api/v1/cow` over the public FQDN.
-
-`Migrate database (test)` and `Deploy iac (prod)` both follow the test iac job and run in parallel. Prod is gated by its GitHub environment approval.
-
-Terraform owns the infrastructure, the pipeline owns the image tag, and `migrations/versions/` owns the schema. See [iac/README.md](iac/README.md) for the split, the naming conventions and the one-off bootstrap, which includes two Supabase secrets per environment.
+Terraform owns the infrastructure, the pipeline owns the image tag, and `migrations/versions/` owns the schema. See [iac/README.md](iac/README.md) to provision an environment and [docs/infrastructure.md](docs/infrastructure.md) for the pipeline and the ownership split.
 
 ### Run the container locally
 
@@ -125,4 +122,6 @@ The API is then on <http://127.0.0.1:8000/docs>. Pass `-e DATABASE_URL=...` to r
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
+- [Architecture](docs/architecture.md) — target design, components and the query pipeline
+- [Infrastructure](docs/infrastructure.md) — Azure resources, resource ownership and the deployment pipeline
+- [Database](docs/database.md) — local and deployed Postgres, migrations and the Supabase connection string
