@@ -23,4 +23,9 @@ output "database_url" {
     condition     = strcontains(local.database_url, ":5432/")
     error_message = "The composed URL is not on the session pooler port 5432, so Alembic DDL would fail. Inspect the pooler_urls output and adjust the port rewrite in main.tf."
   }
+
+  precondition {
+    condition     = startswith(local.database_url, "postgresql+psycopg://")
+    error_message = "The composed URL does not name the psycopg dialect, so SQLAlchemy would fall back to psycopg2 and fail to import it. Inspect the pooler_urls output and adjust the scheme rewrite in main.tf."
+  }
 }

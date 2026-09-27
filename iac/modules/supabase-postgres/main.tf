@@ -40,13 +40,15 @@ locals {
   # IPv6 only on the free tier while GitHub hosted runners are IPv4 only.
   session_pooler_url = replace(local.raw_pooler_url, ":6543/", ":5432/")
 
-  # psycopg needs the SQLAlchemy dialect prefix rather than the bare postgres://
-  # scheme, and the Management API redacts the password in the connection string.
-  sqlalchemy_url = replace(
-    replace(local.session_pooler_url, "postgres://", "postgresql+psycopg://"),
-    "[YOUR-PASSWORD]",
-    var.database_password
-  )
+  # SQLAlchemy needs the psycopg dialect named explicitly: given a bare postgresql://
+  # it loads psycopg2, which is not a dependency. The API returns postgresql://, but
+  # replacing the scheme wholesale rather than matching a literal keeps this correct
+  # whichever of postgres:// or postgresql:// it uses. Done before the password is
+  # inserted so the password can never affect the split.
+  dialect_url = "postgresql+psycopg://${split("://", local.session_pooler_url)[1]}"
+
+  # The Management API redacts the password in the connection string.
+  sqlalchemy_url = replace(local.dialect_url, "[YOUR-PASSWORD]", var.database_password)
 
   database_url = "${local.sqlalchemy_url}?sslmode=require"
 }
