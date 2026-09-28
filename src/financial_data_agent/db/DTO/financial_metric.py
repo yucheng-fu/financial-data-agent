@@ -3,24 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from financial_data_agent.constants import METRIC_FIELDS
 from financial_data_agent.db.models.financial_metric import FinancialMetric
-
-METRIC_FIELDS: tuple[str, ...] = (
-    "revenue",
-    "operating_income",
-    "net_income",
-    "total_assets",
-    "total_liabilities",
-    "stockholders_equity",
-    "current_assets",
-    "operating_cash_flow",
-    "capital_expenditures",
-    "free_cash_flow",
-    "shares_outstanding",
-    "shares_outstanding_diluted",
-    "current_ratio",
-    "debt_to_assets_ratio",
-)
 
 
 @dataclass(slots=True)

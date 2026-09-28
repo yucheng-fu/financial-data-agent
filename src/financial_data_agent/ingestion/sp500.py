@@ -4,10 +4,8 @@ import pandas as pd
 import polars as pl
 import requests
 
-from financial_data_agent.constants import SP500_WIKI_URL
+from financial_data_agent.constants import SP500_PARQUET_NAME, SP500_WIKI_URL
 from financial_data_agent.ingestion.storage import DataStorage, build_data_storage
-
-SP500_PARQUET_NAME = "s&p500.parquet"
 
 
 class SP500Fetcher:

@@ -10,6 +10,7 @@ from financial_data_agent.db.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from financial_data_agent.db.models.company import Company
+    from financial_data_agent.db.models.document_chunk import DocumentChunk
     from financial_data_agent.db.models.financial_metric import FinancialMetric
 
 
@@ -62,4 +63,9 @@ class Document(TimestampMixin, Base):
 
     financial_metrics: Mapped[list[FinancialMetric]] = relationship(
         back_populates="document",
+    )
+
+    chunks: Mapped[list[DocumentChunk]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
     )

@@ -12,15 +12,35 @@ from financial_data_agent.ingestion.storage import (
 BLOB_NAME = "ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2/AAPL_2026_Q2.md"
 
 
-class FakeContainerClient:
-    """Record blob uploads instead of calling Azure."""
+class FakeBlobDownloader:
+    """Return canned blob content instead of streaming from Azure."""
 
-    def __init__(self) -> None:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+    def readall(self) -> str:
+        return self.content
+
+
+class FakeContainerClient:
+    """Record blob uploads and serve canned downloads instead of calling Azure."""
+
+    def __init__(self, blobs: dict[str, str] | None = None) -> None:
         self.uploads: list[tuple[str, bytes, bool]] = []
+        self.blobs = blobs if blobs is not None else {}
+        self.downloads: list[tuple[str, str]] = []
 
     def upload_blob(self, name: str, data: bytes, overwrite: bool) -> object:
         self.uploads.append((name, data, overwrite))
         return object()
+
+    def download_blob(self, blob: str, *, encoding: str) -> FakeBlobDownloader:
+        from azure.core.exceptions import ResourceNotFoundError
+
+        self.downloads.append((blob, encoding))
+        if blob not in self.blobs:
+            raise ResourceNotFoundError(f"{blob} does not exist")
+        return FakeBlobDownloader(self.blobs[blob])
 
 
 def test_local_data_storage_writes_text_and_returns_disk_path(tmp_path: Path) -> None:
@@ -59,6 +79,37 @@ def test_azure_blob_data_storage_uploads_bytes_and_returns_blob_name() -> None:
 
     assert location == "s&p500.parquet"
     assert container_client.uploads == [("s&p500.parquet", b"PAR1", True)]
+
+
+def test_local_data_storage_reads_back_written_text(tmp_path: Path) -> None:
+    storage = LocalDataStorage(tmp_path)
+    storage.save_text(BLOB_NAME, "# Filing")
+
+    assert storage.read_text(BLOB_NAME) == "# Filing"
+
+
+def test_local_data_storage_read_text_raises_when_the_file_is_missing(tmp_path: Path) -> None:
+    storage = LocalDataStorage(tmp_path)
+
+    with pytest.raises(FileNotFoundError, match=BLOB_NAME):
+        storage.read_text(BLOB_NAME)
+
+
+def test_azure_blob_data_storage_reads_text_through_the_container_client() -> None:
+    container_client = FakeContainerClient({BLOB_NAME: "# Filing"})
+    storage = AzureBlobDataStorage(container_client)
+
+    content = storage.read_text(BLOB_NAME)
+
+    assert content == "# Filing"
+    assert container_client.downloads == [(BLOB_NAME, "UTF-8")]
+
+
+def test_azure_blob_data_storage_read_text_raises_file_not_found_for_a_missing_blob() -> None:
+    storage = AzureBlobDataStorage(FakeContainerClient())
+
+    with pytest.raises(FileNotFoundError, match=BLOB_NAME):
+        storage.read_text(BLOB_NAME)
 
 
 def test_build_data_storage_returns_local_when_environment_is_local(monkeypatch, tmp_path: Path) -> None:

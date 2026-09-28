@@ -16,6 +16,9 @@ class FakeDataStorage:
     def save_bytes(self, blob_name: str, content: bytes) -> str:
         raise AssertionError("filings are saved as text")
 
+    def read_text(self, blob_name: str) -> str:
+        raise AssertionError("the fetcher does not read filings back")
+
 
 def test_fetch_filing_saves_through_the_injected_storage(monkeypatch) -> None:
     filing = SimpleNamespace(markdown=lambda: "# Filing", form="10-Q")

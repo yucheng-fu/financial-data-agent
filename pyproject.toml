@@ -10,7 +10,6 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Yucheng" }]
 dependencies = [
-    "ollama==0.6.2",
     "edgartools==5.43.0",
     "fastapi[standard]==0.140.0",
     "python-dotenv>=1.0.1",
@@ -23,12 +22,14 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     "azure-storage-blob>=12.24.0",
     "azure-identity>=1.19.0",
+    "fastembed==0.8.1",
+    "langchain-text-splitters>=1.1.2",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff",
-    "pytest",
+    "ruff>=0.16.0",
+    "pytest>=9.1.1",
     "pyrefly>=1.3.1",
 ]
 

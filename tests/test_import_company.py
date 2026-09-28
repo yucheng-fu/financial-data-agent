@@ -6,8 +6,9 @@ from types import SimpleNamespace
 import polars as pl
 import pytest
 
+from financial_data_agent.constants import SP500_PARQUET_NAME
 from financial_data_agent.ingestion import sp500
-from financial_data_agent.ingestion.sp500 import SP500_PARQUET_NAME, SP500Fetcher
+from financial_data_agent.ingestion.sp500 import SP500Fetcher
 
 SP500_HTML = """
 <table>
@@ -30,6 +31,9 @@ class FakeDataStorage:
     def save_bytes(self, blob_name: str, content: bytes) -> str:
         self.saved.append((blob_name, content))
         return f"stored/{blob_name}"
+
+    def read_text(self, blob_name: str) -> str:
+        raise AssertionError("the S&P 500 table is not read back")
 
 
 def test_fetch_keeps_leading_zeros_in_cik(monkeypatch: pytest.MonkeyPatch) -> None:

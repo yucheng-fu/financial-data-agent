@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from financial_data_agent.db.DTO.financial_metric import METRIC_FIELDS, FinancialMetricDTO
+from financial_data_agent.constants import METRIC_FIELDS
+from financial_data_agent.db.DTO.financial_metric import FinancialMetricDTO
 from financial_data_agent.db.repositories.company import CompanyRepository
 from financial_data_agent.db.repositories.document import DocumentRepository
 from financial_data_agent.db.repositories.financial_metric import FinancialMetricRepository
