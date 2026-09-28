@@ -7,6 +7,7 @@ container_registry_name = "crfdatest"
 container_app_name      = "ca-fda-test"
 container_image         = "mcr.microsoft.com/k8se/quickstart:latest"
 container_target_port   = 8000
+embedding_model         = "BAAI/bge-small-en-v1.5"
 
 # The organization slug is an identifier, not a credential. Replace it before the
 # first apply, see iac/README.md.

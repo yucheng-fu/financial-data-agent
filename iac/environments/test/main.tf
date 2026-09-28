@@ -78,6 +78,7 @@ module "container_app" {
     STORAGE_ACCOUNT_NAME = data.azurerm_storage_account.this.name
     FILINGS_CONTAINER    = azurerm_storage_container.filings.name
     AZURE_CLIENT_ID      = azurerm_user_assigned_identity.app.client_id
+    EMBEDDING_MODEL      = var.embedding_model
   }
 
   secrets = {

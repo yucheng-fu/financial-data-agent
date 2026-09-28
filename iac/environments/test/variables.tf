@@ -67,3 +67,8 @@ variable "supabase_db_password" {
   description = "Password for the Supabase project database, supplied as TF_VAR_supabase_db_password"
   sensitive   = true
 }
+
+variable "embedding_model" {
+  type        = string
+  description = "Embedding model the ingestion layer loads, read as EMBEDDING_MODEL"
+}
