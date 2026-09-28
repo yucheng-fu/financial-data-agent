@@ -247,7 +247,7 @@ def test_import_document_chunks_route_returns_the_import_summary(monkeypatch: py
     )
     monkeypatch.setattr(document_chunk_import, "DocumentChunkRepository", lambda session: chunk_repository)
     monkeypatch.setattr(document_chunk_import, "build_data_storage", lambda: FakeStorage())
-    monkeypatch.setattr(document_chunk_import, "build_embedder", lambda: FakeEmbedder())
+    monkeypatch.setattr(document_chunk_import, "get_embedder", lambda: FakeEmbedder())
 
     client = TestClient(app)
     response = client.post("/api/v1/document-chunks/import", json={"ticker": "AAPL", "year": 2026, "quarter": 2})
@@ -267,7 +267,7 @@ def test_import_document_chunks_route_returns_404_for_an_unknown_company(monkeyp
         document_chunk_import, "CompanyRepository", lambda session: FakeCompanyRepository(session, None)
     )
     monkeypatch.setattr(document_chunk_import, "build_data_storage", lambda: FakeStorage())
-    monkeypatch.setattr(document_chunk_import, "build_embedder", lambda: FakeEmbedder())
+    monkeypatch.setattr(document_chunk_import, "get_embedder", lambda: FakeEmbedder())
 
     client = TestClient(app)
     response = client.post("/api/v1/document-chunks/import", json={"ticker": "AAPL", "year": 2026, "quarter": 2})

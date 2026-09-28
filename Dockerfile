@@ -13,6 +13,11 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --locked --no-dev
 
+# Must match the EMBEDDING_MODEL the environment sets, or it downloads again at runtime.
+ARG EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+RUN uv run --no-dev python -c \
+    "from fastembed import TextEmbedding; TextEmbedding(model_name='$EMBEDDING_MODEL', cache_dir='/app/.model-cache')"
+
 FROM python:3.11-slim-bookworm
 
 # /app is created owned by app rather than by WORKDIR, which would leave it
@@ -25,7 +30,8 @@ WORKDIR /app
 COPY --from=builder --chown=app:app /app /app
 
 ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    EMBEDDING_CACHE_DIR=/app/.model-cache
 
 USER app
 

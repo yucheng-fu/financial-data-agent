@@ -8,6 +8,7 @@ import polars as pl
 from edgar import Company, set_identity
 
 from financial_data_agent.constants import SEC_IDENTITY
+from financial_data_agent.ingestion.paths import filing_blob_name
 from financial_data_agent.ingestion.storage import (
     DataStorage,
     build_data_storage,
@@ -28,22 +29,6 @@ def parse_quarters(raw_quarters: list[str]) -> list[int]:
     for value in raw_quarters:
         quarters.extend(int(part) for part in value.split(",") if part)
     return quarters
-
-
-def filing_blob_name(ticker: str, year: int, quarter: int) -> str:
-    """Build the partitioned location of a filing markdown file.
-
-    Args:
-        ticker: Public company ticker symbol.
-        year: Filing year.
-        quarter: Calendar quarter, from 1 to 4.
-
-    Returns:
-        The relative filing location, using forward slashes.
-    """
-    symbol = ticker.upper()
-    file_stem = f"{symbol}_{year}_Q{quarter}"
-    return f"ticker={symbol}/year={year}/quarter=Q{quarter}/{file_stem}.md"
 
 
 class FilingsFetcher:

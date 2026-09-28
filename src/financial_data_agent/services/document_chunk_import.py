@@ -16,9 +16,9 @@ from financial_data_agent.db.DTO.document_chunk import DocumentChunkDTO
 from financial_data_agent.db.repositories.company import CompanyRepository
 from financial_data_agent.db.repositories.document import DocumentRepository
 from financial_data_agent.db.repositories.document_chunk import DocumentChunkRepository
-from financial_data_agent.ingestion.embeddings import Embedder, build_embedder
-from financial_data_agent.ingestion.filings import filing_blob_name
+from financial_data_agent.ingestion.embeddings import Embedder, get_embedder
 from financial_data_agent.ingestion.markdown_chunking import chunk_markdown
+from financial_data_agent.ingestion.paths import filing_blob_name
 from financial_data_agent.ingestion.storage import DataStorage, build_data_storage
 from financial_data_agent.services.filing_import import CompanyNotFoundError
 from financial_data_agent.services.financial_metrics_import import DocumentNotFoundError
@@ -146,7 +146,7 @@ class DocumentChunkImportService:
         """
         if not contents:
             return []
-        embedder = self.embedder or build_embedder()
+        embedder = self.embedder or get_embedder()
         embeddings = embedder.embed_documents(contents)
         for embedding in embeddings:
             if len(embedding) != EMBEDDING_DIMENSIONS:
