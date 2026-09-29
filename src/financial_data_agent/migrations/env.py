@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 import financial_data_agent.db.models  # noqa: F401
+from financial_data_agent.constants import EMBEDDING_INDEX_NAME
 from financial_data_agent.db.models import Base
 
 # this is the Alembic Config object, which provides
@@ -40,6 +41,28 @@ target_metadata = Base.metadata
 # ... etc.
 
 
+def include_object(
+    object_: object,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: object | None,
+) -> bool:
+    """Decide whether autogenerate should consider a schema object.
+
+    Args:
+        object_: The schema object being considered.
+        name: Name of the schema object.
+        type_: Kind of schema object, such as "table" or "index".
+        reflected: Whether the object was reflected from the database.
+        compare_to: The object being compared against, if any.
+
+    Returns:
+        False for the vector index, True for everything else.
+    """
+    return not (type_ == "index" and name == EMBEDDING_INDEX_NAME)
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -58,6 +81,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -78,7 +102,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

@@ -12,9 +12,9 @@ from sqlalchemy.pool import StaticPool
 
 from financial_data_agent.api.main import app
 from financial_data_agent.api.v1 import import_financial_metrics
+from financial_data_agent.constants import METRIC_FIELDS
 from financial_data_agent.db.DTO.company import CompanyDTO
 from financial_data_agent.db.DTO.document import DocumentDTO
-from financial_data_agent.db.DTO.financial_metric import METRIC_FIELDS
 from financial_data_agent.db.models.base import Base
 from financial_data_agent.db.repositories.company import CompanyRepository
 from financial_data_agent.db.repositories.document import DocumentRepository

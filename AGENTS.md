@@ -62,7 +62,7 @@ Follow the standards defined in the `pyproject.toml` file.
 - Docstring format: Follow the autoDocstring extension format.
 
 ### Project
-AI assistant for analysing S&P 500 earnings reports. `docs/architecture.md` describes the target design: a FastAPI backend, an agent orchestrator choosing between a SQL tool (structured metrics), a RAG tool (pgvector embeddings) and an SEC acquisition tool, all on one PostgreSQL+pgvector instance. Currently only the ingestion/import side (companies, filings, metrics model) is implemented; the agent/RAG layers are not. `src/financial_data_agent/main.py` is just an Ollama scratch script.
+AI assistant for analysing S&P 500 earnings reports. `docs/architecture.md` describes the target design: a FastAPI backend, an agent orchestrator choosing between a SQL tool (structured metrics), a RAG tool (pgvector embeddings) and an SEC acquisition tool, all on one PostgreSQL+pgvector instance. Currently the ingestion/import side (companies, filings, metrics, document chunks) is implemented; the agent layer is not.
 
 ### Architecture
 Layered, with strict one-way dependencies: **api/v1 route → services → repositories → models**, plus **ingestion** for external data sources.

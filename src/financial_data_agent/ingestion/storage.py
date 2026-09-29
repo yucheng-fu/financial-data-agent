@@ -13,8 +13,20 @@ def default_data_dir() -> Path:
     return Path(__file__).resolve().parents[3] / "data"
 
 
+class BlobDownloader(Protocol):
+    """Read the content of a downloaded blob."""
+
+    def readall(self) -> str:
+        """Return the whole blob content.
+
+        Returns:
+            The decoded blob content.
+        """
+        ...
+
+
 class BlobContainerClient(Protocol):
-    """Upload blobs to a single blob container."""
+    """Upload and download blobs in a single blob container."""
 
     def upload_blob(self, name: str, data: bytes, overwrite: bool) -> object:
         """Upload a blob.
@@ -26,6 +38,18 @@ class BlobContainerClient(Protocol):
 
         Returns:
             The client-specific upload result.
+        """
+        ...
+
+    def download_blob(self, blob: str, *, encoding: str) -> BlobDownloader:
+        """Download a blob.
+
+        Args:
+            blob: Name of the blob.
+            encoding: Text encoding used to decode the blob.
+
+        Returns:
+            A downloader for the blob content.
         """
         ...
 
@@ -54,6 +78,20 @@ class DataStorage(Protocol):
 
         Returns:
             The stored location.
+        """
+        ...
+
+    def read_text(self, blob_name: str) -> str:
+        """Read text content.
+
+        Args:
+            blob_name: Relative location of the file.
+
+        Returns:
+            The stored text content.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
         """
         ...
 
@@ -96,6 +134,23 @@ class LocalDataStorage:
         file_path = self._prepare_path(blob_name)
         file_path.write_bytes(content)
         return file_path.as_posix()
+
+    def read_text(self, blob_name: str) -> str:
+        """Read text content from disk.
+
+        Args:
+            blob_name: Relative location of the file.
+
+        Returns:
+            The content of the file.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+        file_path = self.data_dir / blob_name
+        if not file_path.is_file():
+            raise FileNotFoundError(f"{blob_name} was not found under {self.data_dir}")
+        return file_path.read_text(encoding="utf-8")
 
     def _prepare_path(self, blob_name: str) -> Path:
         """Resolve a location under the data directory and create its parents.
@@ -146,6 +201,25 @@ class AzureBlobDataStorage:
         """
         self.container_client.upload_blob(name=blob_name, data=content, overwrite=True)
         return blob_name
+
+    def read_text(self, blob_name: str) -> str:
+        """Download a blob as UTF-8 text.
+
+        Args:
+            blob_name: Name of the blob.
+
+        Returns:
+            The content of the blob.
+
+        Raises:
+            FileNotFoundError: If the blob does not exist.
+        """
+        from azure.core.exceptions import ResourceNotFoundError
+
+        try:
+            return self.container_client.download_blob(blob_name, encoding="UTF-8").readall()
+        except ResourceNotFoundError as error:
+            raise FileNotFoundError(f"{blob_name} was not found in the container") from error
 
 
 def build_data_storage(data_dir: Path | None = None) -> DataStorage:

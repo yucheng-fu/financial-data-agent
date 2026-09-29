@@ -4,24 +4,7 @@ from decimal import Decimal
 
 from edgar import find, set_identity
 
-from financial_data_agent.constants import SEC_IDENTITY
-
-EDGAR_METRIC_KEYS: dict[str, str] = {
-    "revenue": "revenue",
-    "operating_income": "operating_income",
-    "net_income": "net_income",
-    "total_assets": "total_assets",
-    "total_liabilities": "total_liabilities",
-    "stockholders_equity": "stockholders_equity",
-    "current_assets": "current_assets",
-    "operating_cash_flow": "operating_cash_flow",
-    "capital_expenditures": "capital_expenditures",
-    "free_cash_flow": "free_cash_flow",
-    "shares_outstanding": "shares_outstanding_basic",
-    "shares_outstanding_diluted": "shares_outstanding_diluted",
-    "current_ratio": "current_ratio",
-    "debt_to_assets_ratio": "debt_to_assets",
-}
+from financial_data_agent.constants import EDGAR_METRIC_KEYS, SEC_IDENTITY
 
 
 class FinancialMetricsFetcher:

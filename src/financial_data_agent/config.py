@@ -1,6 +1,6 @@
 import os
 
-LOCAL_ENVIRONMENT = "local"
+from financial_data_agent.constants import LOCAL_ENVIRONMENT
 
 
 def get_environment() -> str:
@@ -37,3 +37,24 @@ def require_env(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} environment variable is not set")
     return value
+
+
+def get_embedding_cache_dir() -> str | None:
+    """Return the directory holding downloaded embedding models.
+
+    Returns:
+        The configured cache directory, or None to use the backend's default.
+    """
+    return os.getenv("EMBEDDING_CACHE_DIR", "").strip() or None
+
+
+def get_embedding_model() -> str:
+    """Return the configured embedding model name.
+
+    Returns:
+        The embedding model name.
+
+    Raises:
+        RuntimeError: If `EMBEDDING_MODEL` is not set.
+    """
+    return require_env("EMBEDDING_MODEL")
