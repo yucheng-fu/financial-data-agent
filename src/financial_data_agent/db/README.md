@@ -43,6 +43,14 @@ alembic upgrade head
 
 Add any new model to [models/__init__.py](models/__init__.py), otherwise `--autogenerate` will not see it.
 
+## Enable the llm_reader login
+
+The migrations create `llm_reader` without a password. Once per database, from this directory, set the password used in `LLM_READER_DATABASE_URL`:
+
+```bash
+docker compose --env-file ../../../.env exec postgres psql -U postgres -d financial_data_agent -c "ALTER ROLE llm_reader LOGIN PASSWORD 'change-me'"
+```
+
 ## Further reading
 
 [docs/database.md](../../../docs/database.md) — why `--env-file` is mandatory, what `--autogenerate` compares, the deployed environments and their secrets, how the Supabase connection string is built, and the state of pgvector.
