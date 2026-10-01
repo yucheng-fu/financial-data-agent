@@ -139,6 +139,7 @@ Tests call each tool function directly with fakes patched on the service modules
 
 - `conversations`: `id` UUID PK with server default `gen_random_uuid()`, `title` VARCHAR(255) null, timestamps.
 - `conversation_messages`: `id` PK, `conversation_id` FK `ON DELETE CASCADE`, `position` INT, `role` VARCHAR(20) with CHECK `role IN ('user', 'assistant')`, `content` TEXT, `trace` JSONB null, timestamps; `UNIQUE (conversation_id, position)`.
+- Both tables: `ENABLE ROW LEVEL SECURITY` in the same migration, with no policies. Supabase grants `anon` full access to every new `public` table through its REST API, and RLS is what closes it (see `9a2e6d4b1c8f`). Do not grant them to `llm_reader`.
 
 `ConversationRepository` with `create`, `get_messages` and `append_message`. Verify with `alembic upgrade head`, `downgrade -1`, `upgrade head`, then `alembic check` reports no drift.
 
