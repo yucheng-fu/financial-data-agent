@@ -57,7 +57,7 @@ Each turns an obvious implementation into a wrong one. Verified by inspection.
 5. **Both graphs need a hard step bound, and acquisition needs its own budget.** A routing bug can cycle between nodes, and a model can keep calling `acquire_filing`. Pass `recursion_limit` on every invoke of the chat graph and the TableRAG subgraph, derived from the configured bounds, so a run raises rather than spins. The per-request acquisition counter lives in chat state and the `acquire_filing` wrapper refuses once it is spent — `recursion_limit` alone would allow several SEC round-trips before tripping.
 6. **`alembic revision --autogenerate` produces a broken migration for `Vector` columns** — it emits the type without the import, never emits `CREATE EXTENSION`, and on later autogenerates tries to drop the HNSW index it cannot model. Write vector migrations by hand and add an `include_object` hook to `migrations/env.py`.
 7. **A mounted FastMCP app needs its session manager running.** Mounting `mcp.streamable_http_app()` in `api/main.py` is not enough: the FastAPI `lifespan` must enter `mcp.session_manager.run()`, or the first `/mcp` request fails. `TestClient` only runs the lifespan when used as a context manager, so the MCP test must use `with TestClient(app) as client`.
-8. **`get_engine()` is `lru_cache`d**, so a read-only engine cannot be built by re-calling it with different `connect_args`. Use `get_engine().execution_options(postgresql_readonly=True)`, which returns an `OptionEngine` sharing the parent's pool — zero extra connections, characteristic reset on return to the pool, and dialect-namespaced so it is silently ignored on SQLite and tests keep working.
+8. **Model-generated SQL must not run as the main user.** A read-only transaction blocks writes but not reads, so once `conversations` exist (Phase 9) the model could read other users' messages. It runs as the `llm_reader` role instead, with `SELECT` on `companies`, `documents` and `financial_metrics` only — a separate login, hence a separate small engine. `SET LOCAL ROLE` on the main connection was rejected: a query can switch back from inside a `SELECT`.
 9. **`/mcp` is on public ingress.** The Container App exposes one ingress, so mounting `/mcp` publishes every tool — including `acquire_filing`, a write path into blob storage and Supabase. Require a bearer token matching `MCP_API_KEY` before the mount ships, and test that a request without it is rejected.
 
 ## 4. Phases
@@ -70,7 +70,7 @@ Each phase leaves the repo green under `uv run ruff check . && uv run ruff forma
 | 2 | Chunk schema and migration | done | no |
 | 3 | Table-aware markdown chunking | done | `langchain-text-splitters` |
 | 4 | Chunk import service and route | done | `fastembed` |
-| 5 | Read-only SQL execution | not started | no |
+| 5 | Read-only SQL execution | done | no |
 | 6 | TableRAG scaffolding | not started | no |
 | 7 | TableRAG nodes and subgraph | not started | `langgraph` |
 | 8 | Tools and MCP mount | not started | `mcp` |
@@ -84,13 +84,9 @@ Phases 1–4 are done. Phases 5–13 follow.
 
 ### Phase 5 — Read-only SQL execution
 
-`get_readonly_engine()` / `get_readonly_session_factory()` in `db/database.py`, per trap 8.
+Done. Migration `4f1a9c3e7b2d` creates the `llm_reader` role (trap 8); `get_llm_reader_engine()` in `db/database.py` logs in as it from `LLM_READER_DATABASE_URL`; `services/sql_query.py` `execute_llm_sql` runs the SQL with `SET LOCAL statement_timeout`, `fetchmany(row_limit + 1)` and `finally: session.rollback()`. No regex guard: the role's grants are the enforcement, and Postgres' `permission denied` is the error the model sees. The permission tests in `tests/test_sql_query.py` need a reachable `LLM_READER_DATABASE_URL` and skip without one, including in CI.
 
-`services/sql_query.py` with a pure `guard_select_sql`. **Ordering matters:** strip comments and empty string literals *before* scanning keywords, so `WHERE name = 'Update Inc'` is not a false positive and `WHERE x = 'a; DROP TABLE y'` is not a false negative; match whole words, which is what catches `WITH t AS (DELETE FROM companies RETURNING *) SELECT * FROM t` — a CTE-wrapped write that a plain `startswith("select")` check waves straight through; return the *original* SQL so literals survive to execution. Execute with `SET LOCAL statement_timeout`, `fetchmany(row_limit + 1)` to detect truncation without materializing everything, and `finally: session.rollback()` so the pooled connection goes back clean.
-
-The regex guard is defence in depth and good error messages. **The `READ ONLY` transaction is the actual enforcement.** The real hardening is a least-privilege Postgres role with `GRANT SELECT` on three tables; document that in `docs/agent.md` as the production recommendation rather than adding a config fallback.
-
-Verify both layers independently: the guard rejects an `INSERT`, and bypassing the guard still fails on the read-only transaction.
+Known gap: the SQL is sent without parameters, so psycopg allows several statements, and `SET statement_timeout = 0; SELECT pg_sleep(...)` overrides the timeout. The pool is capped at two connections, so the damage is bounded; close it in Phase 12 before the endpoint goes public.
 
 ### Phase 6 — TableRAG scaffolding, no graph
 
@@ -143,6 +139,7 @@ Tests call each tool function directly with fakes patched on the service modules
 
 - `conversations`: `id` UUID PK with server default `gen_random_uuid()`, `title` VARCHAR(255) null, timestamps.
 - `conversation_messages`: `id` PK, `conversation_id` FK `ON DELETE CASCADE`, `position` INT, `role` VARCHAR(20) with CHECK `role IN ('user', 'assistant')`, `content` TEXT, `trace` JSONB null, timestamps; `UNIQUE (conversation_id, position)`.
+- Both tables: `ENABLE ROW LEVEL SECURITY` in the same migration, with no policies. Supabase grants `anon` full access to every new `public` table through its REST API, and RLS is what closes it (see `9a2e6d4b1c8f`). Do not grant them to `llm_reader`.
 
 `ConversationRepository` with `create`, `get_messages` and `append_message`. Verify with `alembic upgrade head`, `downgrade -1`, `upgrade head`, then `alembic check` reports no drift.
 
@@ -171,7 +168,7 @@ Code in `src/financial_data_agent/evaluation/` so ruff, pyrefly and the import p
 
 ### Phase 12 — Deployed inference and the front end
 
-The chat model is the external hosted API chosen in Phase 11 — no Azure AI Foundry, no Azure OpenAI, no self-hosting. Wire it into the deployed path: its API key and `MCP_API_KEY` as Terraform secrets alongside `database-url` in `iac/environments/{test,prod}/main.tf`, following the existing `secrets` / `secret_env_vars` pattern, plus `LLM_PROVIDER` and `LLM_MODEL` as plain `env_vars`. The container-app module needs no changes — it already iterates secret names generically.
+The chat model is the external hosted API chosen in Phase 11 — no Azure AI Foundry, no Azure OpenAI, no self-hosting. Wire it into the deployed path: its API key and `MCP_API_KEY` as Terraform secrets alongside `database-url` in `iac/environments/{test,prod}/main.tf`, following the existing `secrets` / `secret_env_vars` pattern, plus `LLM_PROVIDER` and `LLM_MODEL` as plain `env_vars`. The container-app module needs no changes — it already iterates secret names generically. Also wire `LLM_READER_DATABASE_URL`: a `llm_reader_db_password` Terraform variable, the URL composed in the Supabase module with the pooler username `llm_reader.<project-ref>`, and an `ALTER ROLE llm_reader LOGIN PASSWORD` step after `alembic upgrade head` in each migrate job.
 
 The front end is **GitHub Pages**: a static page calling `POST /api/v1/chat` from the visitor's browser and rendering the conversation plus the `steps` trace. Source in a `demo/` directory, published by a new job in the existing workflow. **Do not use the "deploy from `/docs`" Pages option** — `docs/` holds the design documents and Pages would publish those. Add `demo` to `.dockerignore`.
 

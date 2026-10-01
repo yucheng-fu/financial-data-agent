@@ -30,6 +30,11 @@ HEADERS_TO_SPLIT_ON: list[tuple[str, str]] = [
 ]
 HEADER_KEYS: tuple[str, ...] = tuple(key for _, key in HEADERS_TO_SPLIT_ON)
 
+SQL_ROW_LIMIT = 200
+SQL_STATEMENT_TIMEOUT_MS = 5000
+LLM_READER_ROLE = "llm_reader"
+LLM_READER_TABLES: tuple[str, ...] = ("companies", "documents", "financial_metrics")
+
 CREATED_STATUS = "created"
 REPLACED_STATUS = "replaced"
 SKIPPED_STATUS = "skipped"

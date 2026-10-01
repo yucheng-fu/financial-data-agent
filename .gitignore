@@ -228,3 +228,6 @@ tfplan
 *.tfplan
 crash.log
 crash.*.log
+
+# graphify
+graphify-out/
