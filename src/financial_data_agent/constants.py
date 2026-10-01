@@ -30,6 +30,38 @@ HEADERS_TO_SPLIT_ON: list[tuple[str, str]] = [
 ]
 HEADER_KEYS: tuple[str, ...] = tuple(key for _, key in HEADERS_TO_SPLIT_ON)
 
+SQL_ROW_LIMIT = 200
+SQL_STATEMENT_TIMEOUT_MS = 5000
+SQL_WRITE_KEYWORDS: tuple[str, ...] = (
+    "insert",
+    "update",
+    "delete",
+    "merge",
+    "upsert",
+    "drop",
+    "alter",
+    "create",
+    "truncate",
+    "grant",
+    "revoke",
+    "copy",
+    "call",
+    "do",
+    "execute",
+    "prepare",
+    "vacuum",
+    "analyze",
+    "reindex",
+    "cluster",
+    "refresh",
+    "lock",
+    "comment",
+    "set",
+    "reset",
+    "into",
+    "set_config",
+)
+
 CREATED_STATUS = "created"
 REPLACED_STATUS = "replaced"
 SKIPPED_STATUS = "skipped"

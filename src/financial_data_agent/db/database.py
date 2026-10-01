@@ -41,6 +41,27 @@ def get_session_factory() -> sessionmaker[Session]:
     return sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
 
 
+def get_readonly_engine() -> Engine:
+    """Return a view of the shared engine whose transactions are read-only on PostgreSQL.
+
+    The view shares the parent engine's connection pool, and the option is ignored by other dialects.
+
+    Returns:
+        The read-only engine.
+    """
+    return get_engine().execution_options(postgresql_readonly=True)
+
+
+@lru_cache(maxsize=1)
+def get_readonly_session_factory() -> sessionmaker[Session]:
+    """Create and cache the session factory bound to the read-only engine.
+
+    Returns:
+        The read-only session factory.
+    """
+    return sessionmaker(autocommit=False, autoflush=False, bind=get_readonly_engine())
+
+
 def get_session() -> Generator[Session, None, None]:
     """Yield a SQLAlchemy session for FastAPI dependencies.
 

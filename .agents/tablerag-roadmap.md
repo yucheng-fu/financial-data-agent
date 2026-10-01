@@ -70,7 +70,7 @@ Each phase leaves the repo green under `uv run ruff check . && uv run ruff forma
 | 2 | Chunk schema and migration | done | no |
 | 3 | Table-aware markdown chunking | done | `langchain-text-splitters` |
 | 4 | Chunk import service and route | done | `fastembed` |
-| 5 | Read-only SQL execution | not started | no |
+| 5 | Read-only SQL execution | done | no |
 | 6 | TableRAG scaffolding | not started | no |
 | 7 | TableRAG nodes and subgraph | not started | `langgraph` |
 | 8 | Tools and MCP mount | not started | `mcp` |
