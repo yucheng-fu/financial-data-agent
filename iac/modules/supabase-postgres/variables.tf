@@ -14,6 +14,12 @@ variable "database_password" {
   sensitive   = true
 }
 
+variable "llm_reader_password" {
+  type        = string
+  description = "Password for the llm_reader role, set on the role by an Alembic migration"
+  sensitive   = true
+}
+
 variable "region" {
   type        = string
   description = "Supabase region, e.g. eu-north-1. Independent of the Azure location"

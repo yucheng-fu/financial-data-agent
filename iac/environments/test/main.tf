@@ -54,11 +54,12 @@ resource "azurerm_role_assignment" "filings_blob_contributor" {
 module "supabase_postgres" {
   source = "../../modules/supabase-postgres"
 
-  organization_id   = var.supabase_organization_id
-  project_name      = var.supabase_project_name
-  region            = var.supabase_region
-  instance_size     = var.supabase_instance_size
-  database_password = var.supabase_db_password
+  organization_id     = var.supabase_organization_id
+  project_name        = var.supabase_project_name
+  region              = var.supabase_region
+  instance_size       = var.supabase_instance_size
+  database_password   = var.supabase_db_password
+  llm_reader_password = var.llm_reader_db_password
 }
 
 module "container_app" {
@@ -82,11 +83,13 @@ module "container_app" {
   }
 
   secrets = {
-    database-url = module.supabase_postgres.database_url
+    database-url            = module.supabase_postgres.database_url
+    llm-reader-database-url = module.supabase_postgres.llm_reader_database_url
   }
 
   secret_env_vars = {
-    DATABASE_URL = "database-url"
+    DATABASE_URL            = "database-url"
+    LLM_READER_DATABASE_URL = "llm-reader-database-url"
   }
 
   depends_on = [azurerm_role_assignment.acr_pull]

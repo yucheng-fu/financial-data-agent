@@ -37,3 +37,9 @@ output "database_url" {
   value     = module.supabase_postgres.database_url
   sensitive = true
 }
+
+# Read inside the migration job like database_url, for the same reason.
+output "llm_reader_database_url" {
+  value     = module.supabase_postgres.llm_reader_database_url
+  sensitive = true
+}

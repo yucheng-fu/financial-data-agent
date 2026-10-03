@@ -87,6 +87,7 @@ jobs:
       ARM_USE_OIDC: "true"
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      TF_VAR_llm_reader_db_password: ${{ secrets.LLM_READER_DB_PASSWORD }}
     outputs:
       resource_group: ${{ steps.tf.outputs.resource_group }}
       registry: ${{ steps.tf.outputs.registry }}
@@ -156,6 +157,9 @@ jobs:
           url="$(terraform output -raw database_url)"
           echo "::add-mask::$url"
           echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+          reader_url="$(terraform output -raw llm_reader_database_url)"
+          echo "::add-mask::$reader_url"
+          echo "LLM_READER_DATABASE_URL=$reader_url" >> "$GITHUB_ENV"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
@@ -246,6 +250,7 @@ jobs:
       ARM_USE_OIDC: "true"
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      TF_VAR_llm_reader_db_password: ${{ secrets.LLM_READER_DB_PASSWORD }}
     outputs:
       resource_group: ${{ steps.tf.outputs.resource_group }}
       registry: ${{ steps.tf.outputs.registry }}
@@ -315,6 +320,9 @@ jobs:
           url="$(terraform output -raw database_url)"
           echo "::add-mask::$url"
           echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+          reader_url="$(terraform output -raw llm_reader_database_url)"
+          echo "::add-mask::$reader_url"
+          echo "LLM_READER_DATABASE_URL=$reader_url" >> "$GITHUB_ENV"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
