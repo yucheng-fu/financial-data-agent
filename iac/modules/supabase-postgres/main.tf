@@ -51,4 +51,12 @@ locals {
   sqlalchemy_url = replace(local.dialect_url, "[YOUR-PASSWORD]", var.database_password)
 
   database_url = "${local.sqlalchemy_url}?sslmode=require"
+
+  # Supavisor usernames are <role>.<project_ref>, so swapping the credentials segment
+  # targets the same pooler as llm_reader.
+  llm_reader_database_url = replace(
+    local.database_url,
+    "postgres.${supabase_project.this.id}:${var.database_password}@",
+    "llm_reader.${supabase_project.this.id}:${var.llm_reader_password}@",
+  )
 }

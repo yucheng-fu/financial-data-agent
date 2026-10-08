@@ -21,12 +21,13 @@ The manual steps involve Entra ID objects and GitHub settings, which are not exp
 
 Supabase needs an **organization** but no project — Terraform creates those. The organization **slug**, visible in the dashboard URL, goes into `supabase_organization_id` in both `environments/test/terraform.tfvars` and `environments/prod/terraform.tfvars`. It is an identifier rather than a credential, which is why it is committed alongside the other resource names.
 
-Notes on the two Supabase secrets:
+Notes on the Supabase secrets:
 
 - **Use a classic token, not a scoped one.** Supabase offers classic account-wide tokens (`sbp_...`) and scoped tokens (`sbp_fc...`) that require picking organizations *and projects*. A project-scoped token cannot work here: Terraform's job is to create the projects, so they do not exist when the token is minted. Creating a project needs the org-level **Organization Projects** permission at read-write. Once both projects exist you can swap in a scoped token limited to this organization and those two projects, keeping Organization Projects read-write so a future replacement still works.
 - **Check the token's expiry when you create it.** The field may default to a short window, and an expired token fails `deploy-iac-*` at provider authentication with no prior warning. Set the longest expiry offered and record the renewal date.
 - `SUPABASE_DB_PASSWORD` reaches Terraform as `TF_VAR_supabase_db_password` and has no default, so a missing secret fails the apply rather than quietly provisioning a guessable password.
-- **Restrict the password to `A-Z a-z 0-9 - _ . ~`.** `modules/supabase-postgres` substitutes it into the connection string by plain string replacement, with no percent-encoding, so a password containing `@`, `/`, `:`, `#`, `?` or `%` silently produces a malformed URL that fails at the migration step rather than at apply. Generate one with `openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32`.
+- `LLM_READER_DB_PASSWORD` reaches Terraform as `TF_VAR_llm_reader_db_password`, also with no default. It is the password of the read-only `llm_reader` role that model-generated SQL runs as.
+- **Restrict both passwords to `A-Z a-z 0-9 - _ . ~`.** `modules/supabase-postgres` substitutes it into the connection string by plain string replacement, with no percent-encoding, so a password containing `@`, `/`, `:`, `#`, `?` or `%` silently produces a malformed URL that fails at the migration step rather than at apply. Generate one with `openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32`.
 - The password ends up in the Terraform state file, like every other resource attribute. That is the reason for the state account's configuration — see [section 3](#3-why-the-state-storage-account-is-configured-this-way).
 - Do not rotate `SUPABASE_DB_PASSWORD` casually. `database_password` is a required argument on `supabase_project`, so changing it makes Terraform update or replace the project.
 - A free Supabase organization allows two active projects, which `test` and `prod` exactly consume. Free projects also pause after 7 days of inactivity, and a paused project fails the migration job.

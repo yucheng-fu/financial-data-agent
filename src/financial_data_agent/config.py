@@ -58,3 +58,15 @@ def get_embedding_model() -> str:
         RuntimeError: If `EMBEDDING_MODEL` is not set.
     """
     return require_env("EMBEDDING_MODEL")
+
+
+def get_llm_model() -> str:
+    """Return the configured chat model name.
+
+    Returns:
+        The chat model name.
+
+    Raises:
+        RuntimeError: If `LLM_MODEL` is not set.
+    """
+    return require_env("LLM_MODEL")

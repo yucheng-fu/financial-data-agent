@@ -34,7 +34,7 @@ docker compose down
 
 ## Migrations
 
-Run from `src/financial_data_agent/` (one level up), where the working `alembic.ini` and `migrations/` live — not from this directory.
+Run from `src/financial_data_agent/` (one level up), where the working `alembic.ini` and `migrations/` live — not from this directory. `.env` must define `LLM_READER_DATABASE_URL`; `upgrade` sets the `llm_reader` password from it.
 
 ```bash
 alembic revision --autogenerate -m "migration name"
@@ -42,14 +42,6 @@ alembic upgrade head
 ```
 
 Add any new model to [models/__init__.py](models/__init__.py), otherwise `--autogenerate` will not see it.
-
-## Enable the llm_reader login
-
-The migrations create `llm_reader` without a password. Once per database, from this directory, set the password used in `LLM_READER_DATABASE_URL`:
-
-```bash
-docker compose --env-file ../../../.env exec postgres psql -U postgres -d financial_data_agent -c "ALTER ROLE llm_reader LOGIN PASSWORD 'change-me'"
-```
 
 ## Further reading
 

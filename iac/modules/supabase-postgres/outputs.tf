@@ -29,3 +29,14 @@ output "database_url" {
     error_message = "The composed URL does not name the psycopg dialect, so SQLAlchemy would fall back to psycopg2 and fail to import it. Inspect the pooler_urls output and adjust the scheme rewrite in main.tf."
   }
 }
+
+output "llm_reader_database_url" {
+  value       = local.llm_reader_database_url
+  description = "SQLAlchemy URL for the llm_reader role on the session pooler, used for model-generated SQL"
+  sensitive   = true
+
+  precondition {
+    condition     = strcontains(local.llm_reader_database_url, "llm_reader.")
+    error_message = "The pooler username was not postgres.<project_ref>, so llm_reader credentials were not substituted. Inspect the pooler_urls output and adjust the replacement in main.tf."
+  }
+}

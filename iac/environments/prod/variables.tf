@@ -68,6 +68,12 @@ variable "supabase_db_password" {
   sensitive   = true
 }
 
+variable "llm_reader_db_password" {
+  type        = string
+  description = "Password for the llm_reader role, supplied as TF_VAR_llm_reader_db_password"
+  sensitive   = true
+}
+
 variable "embedding_model" {
   type        = string
   description = "Embedding model the ingestion layer loads, read as EMBEDDING_MODEL"
