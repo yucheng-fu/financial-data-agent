@@ -35,6 +35,9 @@ SQL_STATEMENT_TIMEOUT_MS = 5000
 LLM_READER_ROLE = "llm_reader"
 LLM_READER_TABLES: tuple[str, ...] = ("companies", "documents", "financial_metrics")
 
+CHAT_SQL_ROW_LIMIT = 50
+CHAT_RECURSION_LIMIT = 10
+
 CREATED_STATUS = "created"
 REPLACED_STATUS = "replaced"
 SKIPPED_STATUS = "skipped"
