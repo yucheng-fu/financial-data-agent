@@ -27,8 +27,5 @@ def build_schema_prompt() -> str:
         The schema description for the system prompt.
     """
     dialect = postgresql.dialect()
-    ddl = [
-        str(CreateTable(Base.metadata.tables[name]).compile(dialect=dialect)).strip()
-        for name in LLM_READER_TABLES
-    ]
+    ddl = [str(CreateTable(Base.metadata.tables[name]).compile(dialect=dialect)).strip() for name in LLM_READER_TABLES]
     return "\n\n".join([*ddl, SCHEMA_NOTES])

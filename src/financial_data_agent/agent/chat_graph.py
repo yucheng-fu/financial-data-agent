@@ -41,9 +41,7 @@ def call_model(
     return {"messages": [model.invoke([system, *state["messages"]])]}
 
 
-def build_chat_graph(
-    chat_model: BaseChatModel, tools: Sequence[Callable[..., Any]]
-) -> CompiledStateGraph:
+def build_chat_graph(chat_model: BaseChatModel, tools: Sequence[Callable[..., Any]]) -> CompiledStateGraph:
     """Compile the agent loop: the model calls tools until it can answer.
 
     Args:
@@ -54,9 +52,7 @@ def build_chat_graph(
         The compiled graph, to be invoked with a `recursion_limit`.
     """
     graph = StateGraph(MessagesState)
-    graph.add_node(
-        "agent", partial(call_model, model=chat_model.bind_tools(tools))
-    )  # Add node for agent
+    graph.add_node("agent", partial(call_model, model=chat_model.bind_tools(tools)))  # Add node for agent
     graph.add_node("tools", ToolNode(tools))  # Add node for tool calling
     graph.add_edge(START, "agent")
     graph.add_conditional_edges("agent", tools_condition)

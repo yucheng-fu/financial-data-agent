@@ -79,9 +79,7 @@ def answer_question(
         ):
             messages = state["messages"]
     except GraphRecursionError:
-        raise ChatStepLimitError(
-            f"No answer within {CHAT_RECURSION_LIMIT} steps", collect_steps(messages)
-        ) from None
+        raise ChatStepLimitError(f"No answer within {CHAT_RECURSION_LIMIT} steps", collect_steps(messages)) from None
     return ChatResult(answer=messages[-1].text, steps=collect_steps(messages))
 
 
@@ -94,12 +92,7 @@ def collect_steps(messages: Sequence[BaseMessage]) -> list[ChatStep]:
     Returns:
         The tool calls in the order they were made.
     """
-    calls = {
-        call["id"]: call
-        for message in messages
-        if isinstance(message, AIMessage)
-        for call in message.tool_calls
-    }
+    calls = {call["id"]: call for message in messages if isinstance(message, AIMessage) for call in message.tool_calls}
     return [
         ChatStep(
             tool=calls[message.tool_call_id]["name"],
