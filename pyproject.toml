@@ -24,6 +24,8 @@ dependencies = [
     "azure-identity>=1.19.0",
     "fastembed==0.8.1",
     "langchain-text-splitters>=1.1.2",
+    "langgraph==1.2.12",
+    "langchain-google-genai==4.4.0",
 ]
 
 [dependency-groups]
