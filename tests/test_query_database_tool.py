@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from contextlib import nullcontext
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -24,7 +27,7 @@ def patch_execution(monkeypatch: pytest.MonkeyPatch, outcome: SQLQueryResult | E
     return calls
 
 
-def test_query_database_formats_columns_and_rows_with_the_chat_row_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_query_database_returns_rows_as_json_objects_with_the_chat_row_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     result = SQLQueryResult(
         columns=["ticker", "name"], rows=[("AAPL", "Apple Inc."), ("MSFT", "Microsoft")], truncated=False
     )
@@ -32,16 +35,29 @@ def test_query_database_formats_columns_and_rows_with_the_chat_row_limit(monkeyp
 
     output = tool_module.query_database("SELECT ticker, name FROM companies")
 
-    assert output == "ticker | name\nAAPL | Apple Inc.\nMSFT | Microsoft"
+    assert json.loads(output) == {
+        "rows": [{"ticker": "AAPL", "name": "Apple Inc."}, {"ticker": "MSFT", "name": "Microsoft"}],
+        "truncated": False,
+        "error": None,
+    }
     assert calls == [("SELECT ticker, name FROM companies", tool_module.CHAT_SQL_ROW_LIMIT)]
 
 
-def test_query_database_notes_truncation(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_query_database_renders_non_json_values_as_strings(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = SQLQueryResult(columns=["revenue", "filed"], rows=[(Decimal("94.93"), date(2025, 8, 1))], truncated=False)
+    patch_execution(monkeypatch, result)
+
+    output = tool_module.query_database("SELECT revenue, filed FROM financial_metrics")
+
+    assert json.loads(output)["rows"] == [{"revenue": "94.93", "filed": "2025-08-01"}]
+
+
+def test_query_database_flags_truncation(monkeypatch: pytest.MonkeyPatch) -> None:
     patch_execution(monkeypatch, SQLQueryResult(columns=["id"], rows=[(1,), (2,)], truncated=True))
 
     output = tool_module.query_database("SELECT id FROM companies")
 
-    assert output.endswith("(truncated to the first 2 rows)")
+    assert json.loads(output) == {"rows": [{"id": 1}, {"id": 2}], "truncated": True, "error": None}
 
 
 def test_query_database_returns_database_errors_as_text(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -52,4 +68,4 @@ def test_query_database_returns_database_errors_as_text(monkeypatch: pytest.Monk
 
     output = tool_module.query_database("SELECT * FROM conversations")
 
-    assert output == "SQL error: permission denied for table conversations"
+    assert json.loads(output) == {"rows": [], "truncated": False, "error": "permission denied for table conversations"}

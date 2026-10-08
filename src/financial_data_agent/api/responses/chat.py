@@ -5,12 +5,20 @@ from typing import Any
 from pydantic import BaseModel
 
 
+class QueryDatabaseResponse(BaseModel):
+    """Rows returned by the query_database tool, or the error that stopped the call."""
+
+    rows: list[dict[str, Any]] = []
+    truncated: bool = False
+    error: str | None = None
+
+
 class ChatStepResponse(BaseModel):
     """One tool call the agent made while answering."""
 
     tool: str
     arguments: dict[str, Any]
-    result: str
+    result: QueryDatabaseResponse
 
 
 class ChatResponse(BaseModel):

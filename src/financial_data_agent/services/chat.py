@@ -15,11 +15,16 @@ from financial_data_agent.ingestion.llm import get_chat_model
 
 @dataclass(frozen=True, slots=True)
 class ChatStep:
-    """One tool call made while answering."""
+    """One tool call made while answering.
+
+    `failed` is set when the call never reached the tool, e.g. an unknown tool name or invalid
+    arguments; `result` is then the error text rather than the tool's output.
+    """
 
     tool: str
     arguments: dict[str, Any]
     result: str
+    failed: bool
 
 
 class ChatStepLimitError(Exception):
@@ -100,6 +105,7 @@ def collect_steps(messages: Sequence[BaseMessage]) -> list[ChatStep]:
             tool=calls[message.tool_call_id]["name"],
             arguments=calls[message.tool_call_id]["args"],
             result=message.text,
+            failed=message.status == "error",
         )
         for message in messages
         if isinstance(message, ToolMessage)

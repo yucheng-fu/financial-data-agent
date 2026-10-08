@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from financial_data_agent.api.requests.chat import ChatRequest
-from financial_data_agent.api.responses.chat import ChatResponse, ChatStepResponse
+from financial_data_agent.api.responses.chat import ChatResponse, ChatStepResponse, QueryDatabaseResponse
 from financial_data_agent.api.tools.query_database import query_database
 from financial_data_agent.services.chat import ChatStep, ChatStepLimitError, answer_question
 
@@ -41,4 +41,9 @@ def to_step_response(step: ChatStep) -> ChatStepResponse:
     Returns:
         The tool call as an API response model.
     """
-    return ChatStepResponse(tool=step.tool, arguments=step.arguments, result=step.result)
+    result = (
+        QueryDatabaseResponse(error=step.result)
+        if step.failed
+        else QueryDatabaseResponse.model_validate_json(step.result)
+    )
+    return ChatStepResponse(tool=step.tool, arguments=step.arguments, result=result)

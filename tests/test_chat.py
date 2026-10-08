@@ -10,10 +10,12 @@ from langchain_core.language_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
 from financial_data_agent.api.main import app
+from financial_data_agent.api.responses.chat import QueryDatabaseResponse
 from financial_data_agent.api.v1 import chat as chat_route
 from financial_data_agent.services import chat as chat_service
 
 SQL = "SELECT count(*) FROM companies"
+RESULT = {"rows": [{"count": 503}], "truncated": False, "error": None}
 
 
 class ToolCallingFakeChatModel(GenericFakeChatModel):
@@ -32,11 +34,11 @@ def query_database(sql: str) -> str:
     Returns:
         The result rows.
     """
-    return "count\n503"
+    return QueryDatabaseResponse.model_validate(RESULT).model_dump_json()
 
 
-def tool_call_message() -> AIMessage:
-    return AIMessage(content="", tool_calls=[{"name": "query_database", "args": {"sql": SQL}, "id": "call-1"}])
+def tool_call_message(tool: str = "query_database") -> AIMessage:
+    return AIMessage(content="", tool_calls=[{"name": tool, "args": {"sql": SQL}, "id": "call-1"}])
 
 
 def use_fakes(monkeypatch: pytest.MonkeyPatch, model: ToolCallingFakeChatModel) -> None:
@@ -55,8 +57,22 @@ def test_chat_route_returns_answer_and_sql_step(monkeypatch: pytest.MonkeyPatch)
     assert response.status_code == 200
     assert response.json() == {
         "answer": "There are 503 companies.",
-        "steps": [{"tool": "query_database", "arguments": {"sql": SQL}, "result": "count\n503"}],
+        "steps": [{"tool": "query_database", "arguments": {"sql": SQL}, "result": RESULT}],
     }
+
+
+def test_chat_route_reports_unknown_tool_call_as_step_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = ToolCallingFakeChatModel(
+        messages=iter([tool_call_message("drop_tables"), AIMessage(content="I cannot do that.")])
+    )
+    use_fakes(monkeypatch, model)
+
+    response = TestClient(app).post("/api/v1/chat", json={"message": "Drop everything"})
+
+    assert response.status_code == 200
+    result = response.json()["steps"][0]["result"]
+    assert result["rows"] == []
+    assert result["error"].startswith("Error: drop_tables is not a valid tool")
 
 
 def test_chat_route_returns_422_when_step_limit_is_hit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,4 +84,4 @@ def test_chat_route_returns_422_when_step_limit_is_hit(monkeypatch: pytest.Monke
     detail = response.json()["detail"]
     assert detail["message"] == "No answer within 10 steps"
     assert detail["steps"]
-    assert detail["steps"][0] == {"tool": "query_database", "arguments": {"sql": SQL}, "result": "count\n503"}
+    assert detail["steps"][0] == {"tool": "query_database", "arguments": {"sql": SQL}, "result": RESULT}
