@@ -65,4 +65,7 @@ def test_chat_route_returns_422_when_step_limit_is_hit(monkeypatch: pytest.Monke
     response = TestClient(app).post("/api/v1/chat", json={"message": "Loop forever"})
 
     assert response.status_code == 422
-    assert "steps" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["message"] == "No answer within 10 steps"
+    assert detail["steps"]
+    assert detail["steps"][0] == {"tool": "query_database", "arguments": {"sql": SQL}, "result": "count\n503"}
