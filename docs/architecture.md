@@ -210,6 +210,6 @@ API:
 Everything runs in the existing single Azure Container App (0.5 vCPU / 1 GiB, `max_replicas = 1`). No new Azure resource is added.
 
 - **Embeddings** run in process with `fastembed` on onnxruntime, for both ingestion and queries.
-- **The chat model is an external hosted API** with a free tier, called over HTTPS. It is not self-hosted — a chat model does not fit the container's CPU and memory, and CPU inference is too slow for the multi-step TableRAG loop. Azure AI Foundry and Azure OpenAI are not used. The provider must support tool calling; the evaluation harness chooses among candidates such as the Gemini API, Groq and GitHub Models.
+- **The chat model is an external hosted API** with a free tier, called over HTTPS. It is not self-hosted — a chat model does not fit the container's CPU and memory, and CPU inference is too slow for the multi-step TableRAG loop. Azure AI Foundry and Azure OpenAI are not used. It is the Gemini API free tier; the provider must support tool calling, and the evaluation harness chooses the model.
 - **Secrets** follow the existing Terraform `secrets` / `secret_env_vars` pattern: `database-url`, the LLM API key and `MCP_API_KEY`. `LLM_PROVIDER` and `LLM_MODEL` are plain `env_vars`. The container-app module is unchanged.
 - **Privacy.** Free tiers may use prompts for training. Filings are public; user messages are not. The chosen tier's data terms are part of the provider decision.
