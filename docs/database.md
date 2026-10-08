@@ -32,14 +32,17 @@ Any new model must be added to `db/models/__init__.py`, otherwise `--autogenerat
 
 Each environment has its own Supabase project, created by `modules/supabase-postgres`. The pipeline's `Migrate database (<env>)` job then runs `alembic upgrade head` against it, and the app deploy is gated on that job so a new image never reaches a database that is behind it.
 
-Two secrets per GitHub environment, and they have different origins:
+Three secrets per GitHub environment, and they have different origins:
 
 | Secret | Where it comes from |
 | --- | --- |
 | `SUPABASE_ACCESS_TOKEN` | Generated in the Supabase dashboard under *Account preferences* → *Access Tokens*. Account-level, so the same value serves both environments. Use a **classic** token, not a project-scoped one. |
 | `SUPABASE_DB_PASSWORD` | You choose it. Terraform **sets** this as the new project's password rather than reading it back, so it is an input, not something to look up. |
+| `LLM_READER_DB_PASSWORD` | You choose it. Terraform composes it into `LLM_READER_DATABASE_URL` for the container app and the migrate job, and migration `b3c7e1d9a4f2` sets it on the `llm_reader` role. Locally the same URL comes from `.env`. |
 
-Add both **before** the first deploy. Neither is produced by the deployment, so there is no ordering problem — without them `terraform plan` fails immediately on provider authentication and on the missing required variable, before anything is created.
+Add all three **before** the first deploy. None is produced by the deployment, so there is no ordering problem — without them `terraform plan` fails immediately on provider authentication and on the missing required variables, before anything is created.
+
+The migration sets the `llm_reader` password once. Changing `LLM_READER_DB_PASSWORD` later needs `alembic downgrade -1` and `alembic upgrade head` against that environment after the apply.
 
 Do not create the projects in the dashboard first. Terraform creates them as `fda-test` and `fda-prod`, and a free organization allows only two active projects.
 
