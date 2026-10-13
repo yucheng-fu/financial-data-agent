@@ -72,8 +72,8 @@ Each phase leaves the repo green under `uv run ruff check . && uv run ruff forma
 | 4 | Chunk import service and route | done | `fastembed` |
 | 5 | Read-only SQL execution | done | no |
 | 6 | Chat-to-SQL slice (PoC) | done | `langgraph`, `langchain-google-genai` |
-| 7 | TableRAG scaffolding | not started | no |
-| 8 | TableRAG nodes and subgraph | not started | no |
+| 7 | TableRAG scaffolding | done | no |
+| 8 | TableRAG nodes and subgraph | done | no |
 | 9 | Tools and MCP mount | not started | `mcp` |
 | 10 | Conversation store | not started | no |
 | 11 | Conversation history and the TableRAG tool in chat | not started | no |
@@ -81,7 +81,7 @@ Each phase leaves the repo green under `uv run ruff check . && uv run ruff forma
 | 13 | Deployed inference and front end | not started | no |
 | 14 | Documentation | not started | no |
 
-Phases 1–6 are done. Phases 7–14 follow.
+Phases 1–8 are done. Phases 9–14 follow.
 
 ### Phase 5 — Read-only SQL execution
 
@@ -93,40 +93,20 @@ Known gap: the SQL is sent without parameters, so psycopg allows several stateme
 
 Done. The thinnest path from a chat message to a database row, built before TableRAG so the end-to-end tunnel is proven first. `POST /api/v1/chat` (`{message}` → `{answer, steps}`, stateless) calls `services/chat.py` `answer_question`, which runs `agent/chat_graph.py` — `agent` ↔ `ToolNode` with `tools_condition`, the agent node a `functools.partial` over the module-level `call_model`, invoked with `recursion_limit` (trap 5). The single tool, `api/tools/query_database.py`, runs `execute_llm_sql` as `llm_reader`, caps output at `CHAT_SQL_ROW_LIMIT = 50` rows and returns database errors as text so the model can correct itself. `agent/schema.py` `build_schema_prompt()` compiles the granted tables' DDL from the models with the postgres dialect — so `"CIK"` comes out quoted (trap 2) — and appends the `documents.quarter` rule (trap 3). Tools are injected by the route, since services may not import `api/`. `create_react_agent` was not used: it is deprecated in favour of `langchain`, which §5 forbids. Gemini 429s are not mapped to an HTTP status yet; that needs care in Phase 13 because importing the provider SDK in a route breaks the seam.
 
-### Phase 7 — TableRAG scaffolding, no graph
+### Phase 7 — TableRAG scaffolding
 
-`agent/tablerag/{constants,errors,state,parsing,rerank,routing}.py` and `services/chunk_retrieval.py`. Every file is a pure function or a thin protocol, testable with no graph and no I/O.
-
-`agent/tablerag/constants.py` holds the request budget: `max_iterations` 2, so a question costs about five model calls (decompose and intermediate answer per subquery, plus the final decompose). Rerank top-k 3 keeps prompts and latency small. SQL output reuses `CHAT_SQL_ROW_LIMIT`.
-
-`agent/tablerag/state.py` holds the subgraph state as a `TypedDict`, with `Annotated[list[...], operator.add]` reducers on the accumulators (`history`, `citations`, `errors`), so nodes return **deltas** and never rebuild a list. `iteration` and `max_iterations` live in state, not module constants, so routers stay pure and tests can set `max_iterations=2` without monkeypatching. There is no `acquired` latch and no acquisition counter here — see §1 deviation 4.
-
-The schema prompt is `agent/schema.py` from Phase 6; the subgraph imports it rather than keeping its own.
-
-`agent/tablerag/rerank.py` holds BM25 and reciprocal rank fusion in about thirty lines of stdlib. Do not import `rank-bm25`: it is installed only as a transitive dependency of `edgartools`, which could drop it in any release, and it has been unmaintained since 2022.
-
-Also add `search_similar` to `DocumentChunkRepository`, split into a pure `build_search_statement(...)` and a thin executor. It must compile to the `<=>` **operator** — `func.cosine_distance(...)` does not use the HNSW index and silently turns every query into a sequential scan. Test the compiled SQL, since SQLite cannot run `<=>`.
+Done. `agent/tablerag/{constants,errors,state,parsing,rerank,routing}.py` and `services/chunk_retrieval.py`, all pure or thin. `build_search_statement` in `db/repositories/document_chunk.py` orders by the `<=>` operator (tested on the compiled SQL) and `search_similar` returns `RetrievedChunk` read models. `rerank.py` is stdlib BM25 plus reciprocal rank fusion with the vector order. `route_sql` runs SQL only when the model wrote some **and** a reranked chunk is a table or the subquery names a metric.
 
 ### Phase 8 — TableRAG nodes and subgraph
 
-`agent/tablerag/prompts/` transcribing the paper's Appendix G templates. The decomposition prompt loses `{table_content}` and gains the subquery-answer history plus the fixed schema; the intermediate-answer prompt keeps its cross-validation instructions close to verbatim — prefer SQL on conflict, fall back to text when SQL errored, explain discrepancies.
+Done. `agent/tablerag/prompts.py` (Appendix G, adapted), `nodes/{decompose,retrieve,rerank,sql,intermediate_answer}.py` bound with `functools.partial`, and `graph.py` `build_tablerag_graph(session, reader_session, chat_model, embedder)` plus `recursion_limit_for(max_iterations)` = `5 * max_iterations + 2`. Deviations from the original plan:
 
-`agent/tablerag/nodes/*.py`, one module-level callable per node, with the chat model, embedder and session bound when the graph is built. Each is testable on its own against a hand-built state dict, before any graph exists.
+- **Decompose writes the SQL.** The paper's NL2SQL is a separate call per subquery; folding it into decompose keeps a question at five calls. The contract is `{"action": "subquery", "subquery", "tickers", "years", "quarters", "sql": "..." | null}` or `{"action": "answer", "answer": "..."}`.
+- **No `finalize` node.** `citations` and `missing` use a dedup `union` reducer and the answer comes from the last decompose, so `decompose` routes to `END`. A subquery returned past `max_iterations` ends the graph with `answer=None` — Phase 12's `terminated_at_max`.
+- **Two sessions.** Chunks are searched on the main session (not granted to `llm_reader`); SQL runs on the reader session (trap 8).
+- **`missing`** is every fully named `(ticker, year, quarter)` absent from the retrieved candidates when SQL returned no rows. It only checks the top `RETRIEVE_TOP_K` candidates (marked `ponytail:` in `intermediate_answer.py`).
 
-The decompose contract is one of two JSON shapes:
-
-```json
-{"action": "subquery", "subquery": "...", "tickers": ["AAPL"], "years": [2024], "quarters": [3]}
-{"action": "answer"}
-```
-
-This keeps the subgraph independent of native tool calling and hands `retrieve` its filters for free.
-
-`agent/tablerag/graph.py` — `build_tablerag_graph(session, chat_model, embedder, ...)` compiles the `StateGraph` (`decompose → retrieve → rerank → (route_sql) sql → intermediate_answer → decompose … → finalize`), with both backends injected and never constructed here; that injection is what lets the eval harness swap them. Built per request, which keeps the session lifetime scoped to the request.
-
-When retrieval and SQL are both empty for a subquery's `(ticker, year, quarter)`, `intermediate_answer` records a `missing` entry and `finalize` returns it alongside the answer, so the chat agent can decide to acquire.
-
-The graph test asserts the **visit sequence**, not just the final answer — a final-answer assertion alone passes even if `route_sql` never fired. A second test asserts a subquery with no data surfaces in `missing`.
+Phase 9's `table_rag` wrapper must catch `GraphRecursionError` and `DecompositionParseError`, and pass `recursion_limit_for` on every invoke.
 
 ### Phase 9 — Tools and MCP mount
 

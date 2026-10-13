@@ -132,33 +132,9 @@ flowchart LR
 ```
 
 ### 4.2 Online loop
-```mermaid
-flowchart LR
-    start(["START"])
-    decompose["decompose"]
-    retrieve["retrieve"]
-    rerank["rerank"]
-    sql["sql"]
-    intermediate["intermediate_answer"]
-    finalize["finalize"]
-    finish(["END"])
+Decompose → retrieve → rerank → (SQL) → intermediate answer, repeated per subquery. The schema is fixed (`financial_metrics` joined to `documents` and `companies`) and fits in the prompt, so there is no per-document schema extraction; chunk metadata `(ticker, year, quarter)` supplies the filters. When retrieval and SQL both come back empty, the subgraph reports the gap and the chat agent decides whether to acquire.
 
-    start --> decompose
-    decompose -->|subquery| retrieve
-    decompose -->|answer| finalize
-    retrieve --> rerank
-    rerank -->|route_sql: table chunk or metric named| sql
-    rerank -->|text only| intermediate
-    sql --> intermediate
-    intermediate --> decompose
-    finalize --> finish
-```
-
-- The schema is fixed (`financial_metrics` joined to `documents` and `companies`) and fits in the prompt, so there is no per-document schema extraction. Chunk metadata `(ticker, year, quarter)` supplies SQL filters.
-- `route_sql` runs SQL when any reranked chunk has `is_table = true` or the subquery names a metric in `METRIC_FIELDS`.
-- SQL runs on a read-only transaction; the statement guard is defence in depth.
-- When retrieval and SQL both come back empty for a `(ticker, year, quarter)`, the subgraph reports the gap instead of acquiring. Acquisition is the chat agent's decision.
-- The result carries the answer, citations (`accession_number`, `chunk_index`, `heading_path`) and a per-subquery `steps` trace.
+Components, control flow, state and bounds: [RAG.md](RAG.md).
 
 ## 5. Tools and MCP
 Tools live in `api/tools/`. Like `api/v1` routes, they are thin: they call services and translate service exceptions into tool errors.
