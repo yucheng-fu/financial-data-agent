@@ -39,3 +39,17 @@ class DocumentChunkDTO:
             if field in self.supplied_fields:
                 setattr(document_chunk, field, getattr(self, field))
         return document_chunk
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievedChunk:
+    """A chunk returned by similarity search, with the filing it came from."""
+
+    content: str
+    is_table: bool
+    heading_path: str | None
+    chunk_index: int
+    ticker: str
+    year: int
+    quarter: int
+    accession_number: str

@@ -2,11 +2,57 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.orm import Session
 
-from financial_data_agent.db.DTO.document_chunk import DocumentChunkDTO
+from financial_data_agent.db.DTO.document_chunk import DocumentChunkDTO, RetrievedChunk
+from financial_data_agent.db.models.company import Company
+from financial_data_agent.db.models.document import Document
 from financial_data_agent.db.models.document_chunk import DocumentChunk
+
+
+def build_search_statement(
+    embedding: Sequence[float],
+    tickers: Sequence[str],
+    years: Sequence[int],
+    quarters: Sequence[int],
+    limit: int,
+) -> Select:
+    """Build the nearest-neighbour query over chunk embeddings.
+
+    Orders by the `<=>` operator so the HNSW index is used; `func.cosine_distance` is not.
+
+    Args:
+        embedding: Query embedding.
+        tickers: Tickers to restrict to, or empty for all.
+        years: Fiscal years to restrict to, or empty for all.
+        quarters: Fiscal quarters to restrict to, or empty for all.
+        limit: Maximum number of chunks to return.
+
+    Returns:
+        The select statement, closest chunks first.
+    """
+    statement = (
+        select(
+            DocumentChunk.content,
+            DocumentChunk.is_table,
+            DocumentChunk.heading_path,
+            DocumentChunk.chunk_index,
+            Company.ticker,
+            Document.year,
+            Document.quarter,
+            Document.accession_number,
+        )
+        .join(Document, DocumentChunk.document_id == Document.id)
+        .join(Company, Document.company_id == Company.id)
+    )
+    if tickers:
+        statement = statement.where(Company.ticker.in_(tickers))
+    if years:
+        statement = statement.where(Document.year.in_(years))
+    if quarters:
+        statement = statement.where(Document.quarter.in_(quarters))
+    return statement.order_by(DocumentChunk.embedding.op("<=>")(list(embedding))).limit(limit)
 
 
 class DocumentChunkRepository:
@@ -99,6 +145,29 @@ class DocumentChunkRepository:
         deleted = self.session.execute(statement).rowcount
         self.session.commit()
         return deleted
+
+    def search_similar(
+        self,
+        embedding: Sequence[float],
+        tickers: Sequence[str],
+        years: Sequence[int],
+        quarters: Sequence[int],
+        limit: int,
+    ) -> list[RetrievedChunk]:
+        """Return the chunks closest to an embedding, within the given filings.
+
+        Args:
+            embedding: Query embedding.
+            tickers: Tickers to restrict to, or empty for all.
+            years: Fiscal years to restrict to, or empty for all.
+            quarters: Fiscal quarters to restrict to, or empty for all.
+            limit: Maximum number of chunks to return.
+
+        Returns:
+            The closest chunks first.
+        """
+        statement = build_search_statement(embedding, tickers, years, quarters, limit)
+        return [RetrievedChunk(*row) for row in self.session.execute(statement)]
 
     def list(self) -> Sequence[DocumentChunk]:
         """Return all document chunks ordered by id.
