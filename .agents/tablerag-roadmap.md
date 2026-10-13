@@ -128,7 +128,7 @@ Dropped: the demo has no login, so history lives in the browser (see Phase 11).
 
 Extends Phase 6 rather than building anew. The chat graph is unchanged; the route passes the Phase 9 tools (`table_rag`, `list_available_filings`, `acquire_filing`) alongside `query_database`.
 
-`ChatRequest` becomes `{messages: [{role: "user" | "assistant", content}]}`. Pydantic enforces that the last message is from the user, at most `CHAT_HISTORY_LIMIT` messages and a per-message length cap; anything else is a 422. The response becomes `{answer, citations, steps}`. The route stays sync `def` like every existing route — FastAPI already runs sync routes in a threadpool.
+`ChatRequest` becomes `{messages: [{role: "user" | "assistant", content}]}`. Pydantic enforces that the last message is from the user, at most `CHAT_HISTORY_LIMIT` messages and a per-message length cap; anything else is a 422. The response becomes `{answer, citations, steps, usage}`. The route stays sync `def` like every existing route — FastAPI already runs sync routes in a threadpool.
 
 `services/chat.py` — `answer_question(messages, tools)` converts the pairs to `HumanMessage` / `AIMessage` and invokes the graph. It loads and persists nothing.
 

@@ -167,7 +167,7 @@ flowchart LR
 ## 6. Conversation State
 The server is stateless. The demo is a public page with no login, so there is no conversation to resume; the browser holds the conversation in memory and a refresh starts over.
 
-- `POST /api/v1/chat` — `{messages: [{role: "user" | "assistant", content}]}` → `{answer, citations, steps}`. The last message must be from the user; the history is capped at `CHAT_HISTORY_LIMIT` messages with a per-message length cap, and anything else is rejected with 422.
+- `POST /api/v1/chat` — `{messages: [{role: "user" | "assistant", content}]}` → `{answer, citations, steps, usage}`. The last message must be from the user; the history is capped at `CHAT_HISTORY_LIMIT` messages with a per-message length cap, and anything else is rejected with 422.
 - Only user messages and final answers are sent back. Tool calls are not replayed, so context stays bounded.
 - The client can forge assistant turns. The tools are bounded by `llm_reader`, the acquisition budget and `recursion_limit`, not by trusting history.
 - **Rejected: a server-side conversation store.** With no login it resumes nothing, and it adds tables, RLS and retained user messages.

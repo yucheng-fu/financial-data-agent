@@ -27,26 +27,37 @@ class ChatStep:
     failed: bool
 
 
+@dataclass(frozen=True, slots=True)
+class TokenUsage:
+    """Tokens spent on chat model calls, summed over a run."""
+
+    input_tokens: int
+    output_tokens: int
+
+
 class ChatStepLimitError(Exception):
     """Raised when the agent does not reach an answer within the step limit."""
 
-    def __init__(self, message: str, steps: list[ChatStep]) -> None:
+    def __init__(self, message: str, steps: list[ChatStep], usage: TokenUsage) -> None:
         """Initialize the error.
 
         Args:
             message: Description of the failure.
             steps: The tool calls made before the limit was hit.
+            usage: The tokens spent before the limit was hit.
         """
         super().__init__(message)
         self.steps = steps
+        self.usage = usage
 
 
 @dataclass(frozen=True, slots=True)
 class ChatResult:
-    """The final answer and the tool calls that produced it."""
+    """The final answer, the tool calls that produced it and the tokens spent."""
 
     answer: str
     steps: list[ChatStep]
+    usage: TokenUsage
 
 
 def answer_question(
@@ -62,7 +73,7 @@ def answer_question(
         chat_model: The chat model to use, or None for the configured one.
 
     Returns:
-        The answer and every tool call made on the way.
+        The answer, every tool call made on the way and the tokens spent.
 
     Raises:
         ChatStepLimitError: If the agent exceeds `CHAT_RECURSION_LIMIT` graph steps.
@@ -79,8 +90,10 @@ def answer_question(
         ):
             messages = state["messages"]
     except GraphRecursionError:
-        raise ChatStepLimitError(f"No answer within {CHAT_RECURSION_LIMIT} steps", collect_steps(messages)) from None
-    return ChatResult(answer=messages[-1].text, steps=collect_steps(messages))
+        raise ChatStepLimitError(
+            f"No answer within {CHAT_RECURSION_LIMIT} steps", collect_steps(messages), count_tokens(messages)
+        ) from None
+    return ChatResult(answer=messages[-1].text, steps=collect_steps(messages), usage=count_tokens(messages))
 
 
 def collect_steps(messages: Sequence[BaseMessage]) -> list[ChatStep]:
@@ -103,3 +116,20 @@ def collect_steps(messages: Sequence[BaseMessage]) -> list[ChatStep]:
         for message in messages
         if isinstance(message, ToolMessage)
     ]
+
+
+def count_tokens(messages: Sequence[BaseMessage]) -> TokenUsage:
+    """Sum the token usage the provider reported on each model reply.
+
+    Args:
+        messages: The full conversation returned by the graph.
+
+    Returns:
+        The input and output tokens across every model call.
+    """
+    usages = [message.usage_metadata for message in messages if isinstance(message, AIMessage)]
+    reported = [usage for usage in usages if usage is not None]
+    return TokenUsage(
+        input_tokens=sum(usage["input_tokens"] for usage in reported),
+        output_tokens=sum(usage["output_tokens"] for usage in reported),
+    )

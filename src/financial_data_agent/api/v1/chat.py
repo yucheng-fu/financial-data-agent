@@ -3,7 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from financial_data_agent.api.requests.chat import ChatRequest
-from financial_data_agent.api.responses.chat import ChatResponse, ChatStepResponse, QueryDatabaseResponse
+from financial_data_agent.api.responses.chat import (
+    ChatResponse,
+    ChatStepResponse,
+    QueryDatabaseResponse,
+    TokenUsageResponse,
+)
 from financial_data_agent.api.tools.query_database import query_database
 from financial_data_agent.services.chat import ChatStep, ChatStepLimitError, answer_question
 
@@ -18,18 +23,26 @@ def chat(request: ChatRequest) -> ChatResponse:
         request: The user's question.
 
     Returns:
-        The answer and the tool calls, including any SQL, that produced it.
+        The answer, the tool calls (including any SQL) that produced it and the tokens spent.
 
     Raises:
         HTTPException: 422 if the agent does not reach an answer within the step limit; the
-            detail carries the tool calls made before the limit was hit.
+            detail carries the tool calls made and tokens spent before the limit was hit.
     """
     try:
         result = answer_question(request.message, tools=[query_database])
     except ChatStepLimitError as error:
-        detail = {"message": str(error), "steps": [to_step_response(step).model_dump() for step in error.steps]}
+        detail = {
+            "message": str(error),
+            "steps": [to_step_response(step).model_dump() for step in error.steps],
+            "usage": TokenUsageResponse.model_validate(error.usage, from_attributes=True).model_dump(),
+        }
         raise HTTPException(status_code=422, detail=detail) from None
-    return ChatResponse(answer=result.answer, steps=[to_step_response(step) for step in result.steps])
+    return ChatResponse(
+        answer=result.answer,
+        steps=[to_step_response(step) for step in result.steps],
+        usage=TokenUsageResponse.model_validate(result.usage, from_attributes=True),
+    )
 
 
 def to_step_response(step: ChatStep) -> ChatStepResponse:

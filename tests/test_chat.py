@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from langchain_core.language_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
+from langchain_core.messages.ai import UsageMetadata
 
 from financial_data_agent.api.main import app
 from financial_data_agent.api.responses.chat import QueryDatabaseResponse
@@ -37,8 +38,18 @@ def query_database(sql: str) -> str:
     return QueryDatabaseResponse.model_validate(RESULT).model_dump_json()
 
 
+def usage(input_tokens: int, output_tokens: int) -> UsageMetadata:
+    return UsageMetadata(
+        input_tokens=input_tokens, output_tokens=output_tokens, total_tokens=input_tokens + output_tokens
+    )
+
+
 def tool_call_message(tool: str = "query_database") -> AIMessage:
-    return AIMessage(content="", tool_calls=[{"name": tool, "args": {"sql": SQL}, "id": "call-1"}])
+    return AIMessage(
+        content="",
+        tool_calls=[{"name": tool, "args": {"sql": SQL}, "id": "call-1"}],
+        usage_metadata=usage(100, 20),
+    )
 
 
 def use_fakes(monkeypatch: pytest.MonkeyPatch, model: ToolCallingFakeChatModel) -> None:
@@ -48,7 +59,9 @@ def use_fakes(monkeypatch: pytest.MonkeyPatch, model: ToolCallingFakeChatModel) 
 
 def test_chat_route_returns_answer_and_sql_step(monkeypatch: pytest.MonkeyPatch) -> None:
     model = ToolCallingFakeChatModel(
-        messages=iter([tool_call_message(), AIMessage(content="There are 503 companies.")])
+        messages=iter(
+            [tool_call_message(), AIMessage(content="There are 503 companies.", usage_metadata=usage(150, 8))]
+        )
     )
     use_fakes(monkeypatch, model)
 
@@ -58,7 +71,16 @@ def test_chat_route_returns_answer_and_sql_step(monkeypatch: pytest.MonkeyPatch)
     assert response.json() == {
         "answer": "There are 503 companies.",
         "steps": [{"tool": "query_database", "arguments": {"sql": SQL}, "result": RESULT}],
+        "usage": {"input_tokens": 250, "output_tokens": 28},
     }
+
+
+def test_chat_route_reports_zero_usage_when_provider_omits_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    use_fakes(monkeypatch, ToolCallingFakeChatModel(messages=iter([AIMessage(content="Hello.")])))
+
+    response = TestClient(app).post("/api/v1/chat", json={"message": "Hi"})
+
+    assert response.json()["usage"] == {"input_tokens": 0, "output_tokens": 0}
 
 
 def test_chat_route_reports_unknown_tool_call_as_step_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -85,3 +107,4 @@ def test_chat_route_returns_422_when_step_limit_is_hit(monkeypatch: pytest.Monke
     assert detail["message"] == "No answer within 10 steps"
     assert detail["steps"]
     assert detail["steps"][0] == {"tool": "query_database", "arguments": {"sql": SQL}, "result": RESULT}
+    assert detail["usage"] == {"input_tokens": 100 * len(detail["steps"]), "output_tokens": 20 * len(detail["steps"])}
