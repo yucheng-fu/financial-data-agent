@@ -58,7 +58,9 @@ def render_sql_result(result: SQLQueryResult | None, error: str | None) -> str:
 
 
 def find_missing(
-    current: SubQueryAction, candidates: Sequence[RetrievedChunk], result: SQLQueryResult | None
+    current: SubQueryAction,
+    candidates: Sequence[RetrievedChunk],
+    result: SQLQueryResult | None,
 ) -> list[MissingFiling]:
     """Return the filings the subquery names that neither retrieval nor SQL found.
 
@@ -74,12 +76,13 @@ def find_missing(
     """
     if result is not None and result.rows:
         return []
-    # ponytail: only the top RETRIEVE_TOP_K candidates are checked, so a stored filing outranked by others is
-    # reported missing; check coverage per filing (Phase 9 list_available_filings) if that shows up in evals.
+
     found = {(chunk.ticker, chunk.year, chunk.quarter) for chunk in candidates}
     return [
         MissingFiling(ticker, year, quarter)
-        for ticker, year, quarter in product(current.tickers, current.years, current.quarters)
+        for ticker, year, quarter in product(
+            current.tickers, current.years, current.quarters
+        )
         if (ticker, year, quarter) not in found
     ]
 
@@ -105,7 +108,14 @@ def intermediate_answer(state: TableRAGState, model: BaseChatModel) -> dict[str,
     )
     answer = model.invoke([HumanMessage(prompt)]).text
     citations = [
-        Citation(chunk.ticker, chunk.year, chunk.quarter, chunk.accession_number, chunk.chunk_index, chunk.heading_path)
+        Citation(
+            chunk.ticker,
+            chunk.year,
+            chunk.quarter,
+            chunk.accession_number,
+            chunk.chunk_index,
+            chunk.heading_path,
+        )
         for chunk in state["reranked"]
     ]
     return {
