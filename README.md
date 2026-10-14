@@ -114,11 +114,17 @@ Write migrations for `Vector` columns by hand, because autogenerate gets them wr
 
 ```text
 .
+├── .github/workflows/ - CI and the Azure deployment pipeline
 ├── data/ - Generated datasets organized by ticker, year, and quarter
 ├── docs/ - Design documents
-├── iac/ - Terraform for the Azure infrastructure (test and prod environments)
+├── iac/ - Azure infrastructure as code
+│   ├── bootstrap/ - Bicep for the resource group and Terraform state backend
+│   ├── environments/ - Terraform root modules, one per environment
+│   └── modules/ - Reusable Terraform modules
+├── papers/ - Reference papers (TableRAG, TAG)
 ├── src/financial_data_agent/
-│   ├── agent/ - LangGraph chat graph, schema prompt and the TableRAG subgraph
+│   ├── agent/ - LangGraph chat graph and schema prompt
+│   │   └── tablerag/ - TableRAG subgraph: decomposition, retrieval, reranking and SQL
 │   ├── api/ - API routes, agent tools, request models and response models
 │   ├── db/ - Database models, repositories, DTOs and schemas
 │   ├── ingestion/ - S&P 500 and SEC acquisition, storage, chunking, embeddings and the chat model
