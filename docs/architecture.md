@@ -4,6 +4,7 @@
 Financial Data Agent is an AI-powered assistant for analysing earnings reports for companies in the S&P 500.
 
 A user asks questions in natural language over a multi-turn conversation. The browser keeps the conversation and sends prior turns with each message; the server stores nothing. A chat agent answers follow-ups from that history and calls tools when it needs data:
+- `query_database` runs one read-only SQL query for direct metric lookups.
 - `table_rag` answers grounded questions from structured metrics (SQL) and filing text (pgvector), following TableRAG (arXiv 2506.10380).
 - `list_available_filings` reports which filings are already ingested.
 - `acquire_filing` fetches a missing filing from SEC EDGAR and ingests it.
@@ -28,6 +29,7 @@ flowchart TD
         chat_graph["Chat Graph\n(LangGraph)"]
 
         subgraph Tools["api/tools"]
+            query_db["query_database"]
             table_rag["table_rag"]
             list_filings["list_available_filings"]
             acquire["acquire_filing"]
@@ -66,6 +68,7 @@ flowchart TD
     %% TOOLS
     %% =========================================================
 
+    query_db --> services
     table_rag --> tablerag_graph
     tablerag_graph <-->|Decompose / answer| llm
     tablerag_graph --> services
@@ -138,6 +141,7 @@ Tools live in `api/tools/`. Like `api/v1` routes, they are thin: they call servi
 
 | Tool | Backed by | Reads / writes |
 | --- | --- | --- |
+| `query_database(sql)` | `services/sql_query.py` as `llm_reader` | Supabase metrics (SQL); how it differs from TableRAG's SQL: [RAG.md §5](RAG.md#5-sql-in-tablerag-vs-query_database) |
 | `table_rag(question, tickers?, years?, quarters?)` | TableRAG subgraph → `services/chunk_retrieval.py`, `services/sql_query.py` | Supabase metrics (SQL) and chunks (pgvector) |
 | `list_available_filings(ticker?)` | `DocumentRepository` | Supabase `documents` and chunk counts |
 | `acquire_filing(ticker, year, quarter)` | `FilingImportService`, `FinancialMetricsImportService`, `DocumentChunkImportService` | SEC → Azure Blob → Supabase; re-chunks from the stored blob when the filing exists but has no chunks |
