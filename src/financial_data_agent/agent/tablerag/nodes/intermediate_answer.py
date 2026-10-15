@@ -80,9 +80,7 @@ def find_missing(
     found = {(chunk.ticker, chunk.year, chunk.quarter) for chunk in candidates}
     return [
         MissingFiling(ticker, year, quarter)
-        for ticker, year, quarter in product(
-            current.tickers, current.years, current.quarters
-        )
+        for ticker, year, quarter in product(current.tickers, current.years, current.quarters)
         if (ticker, year, quarter) not in found
     ]
 
