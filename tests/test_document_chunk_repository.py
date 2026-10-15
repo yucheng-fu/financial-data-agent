@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import Select, create_engine
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,7 +15,7 @@ from financial_data_agent.db.DTO.document_chunk import DocumentChunkDTO
 from financial_data_agent.db.models.base import Base
 from financial_data_agent.db.repositories.company import CompanyRepository
 from financial_data_agent.db.repositories.document import DocumentRepository
-from financial_data_agent.db.repositories.document_chunk import DocumentChunkRepository
+from financial_data_agent.db.repositories.document_chunk import DocumentChunkRepository, build_search_statement
 
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
@@ -136,3 +137,23 @@ def test_document_chunk_repository_update_ignores_unsupplied_fields() -> None:
 
     assert updated_chunk.content == "chunk 0"
     assert updated_chunk.token_count == 12
+
+
+def compile_postgres(statement: Select) -> str:
+    return str(statement.compile(dialect=postgresql.dialect()))
+
+
+def test_build_search_statement_orders_by_cosine_operator_for_hnsw_index() -> None:
+    sql = compile_postgres(build_search_statement([0.0] * EMBEDDING_DIMENSIONS, [], [], [], limit=5))
+
+    assert "document_chunks.embedding <=> " in sql
+    assert "cosine_distance" not in sql
+    assert "WHERE" not in sql
+
+
+def test_build_search_statement_filters_only_on_supplied_filings() -> None:
+    sql = compile_postgres(build_search_statement([0.0] * EMBEDDING_DIMENSIONS, ["AAPL"], [2024], [], limit=5))
+
+    assert "companies.ticker IN" in sql
+    assert "documents.year IN" in sql
+    assert "documents.quarter" not in sql.split("WHERE", 1)[1]

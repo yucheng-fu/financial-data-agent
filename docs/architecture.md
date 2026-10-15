@@ -3,7 +3,8 @@
 ## 1. Overview
 Financial Data Agent is an AI-powered assistant for analysing earnings reports for companies in the S&P 500.
 
-A user asks questions in natural language over a multi-turn conversation. A chat agent answers follow-ups from the conversation history and calls tools when it needs data:
+A user asks questions in natural language over a multi-turn conversation. The browser keeps the conversation and sends prior turns with each message; the server stores nothing. A chat agent answers follow-ups from that history and calls tools when it needs data:
+- `query_database` runs one read-only SQL query for direct metric lookups.
 - `table_rag` answers grounded questions from structured metrics (SQL) and filing text (pgvector), following TableRAG (arXiv 2506.10380).
 - `list_available_filings` reports which filings are already ingested.
 - `acquire_filing` fetches a missing filing from SEC EDGAR and ingests it.
@@ -28,6 +29,7 @@ flowchart TD
         chat_graph["Chat Graph\n(LangGraph)"]
 
         subgraph Tools["api/tools"]
+            query_db["query_database"]
             table_rag["table_rag"]
             list_filings["list_available_filings"]
             acquire["acquire_filing"]
@@ -44,18 +46,16 @@ flowchart TD
     subgraph Supabase["PostgreSQL (Supabase)"]
         metrics[("financial_metrics\ncompanies, documents")]
         chunks[("document_chunks\n(pgvector)")]
-        conversations[("conversations\nconversation_messages")]
     end
 
     %% =========================================================
     %% CHAT PATH
     %% =========================================================
 
-    user -->|1. Message + conversation_id| chat_route
-    chat_route -->|2. Load history| conversations
-    chat_route -->|3. Invoke| chat_graph
+    user -->|1. Messages: history + new message| chat_route
+    chat_route -->|2. Invoke| chat_graph
     chat_graph <-->|Reason / choose tool| llm
-    chat_graph -->|4. Tool calls| Tools
+    chat_graph -->|3. Tool calls| Tools
 
     %% =========================================================
     %% MCP PATH
@@ -68,6 +68,7 @@ flowchart TD
     %% TOOLS
     %% =========================================================
 
+    query_db --> services
     table_rag --> tablerag_graph
     tablerag_graph <-->|Decompose / answer| llm
     tablerag_graph --> services
@@ -84,8 +85,7 @@ flowchart TD
     %% RESPONSE
     %% =========================================================
 
-    chat_route -->|5. Persist turn| conversations
-    chat_route -->|6. Answer + citations + steps| user
+    chat_route -->|4. Answer + citations + steps| user
 ```
 
 Dependencies are one-way: `api/v1` and `api/tools` → `agent` → `services` → `db/repositories` → `db/models`, with `ingestion/` for external I/O. `agent/` never imports `api/`; routes and tools construct the graphs and inject the chat model, embedder and session.
@@ -108,7 +108,7 @@ flowchart LR
 
 - **Step bound.** `recursion_limit` is the hard cap on graph steps. A run that hits it raises instead of spinning.
 - **Acquisition budget.** A counter in chat state caps SEC round-trips per request. The `acquire_filing` wrapper checks it and returns a refusal message to the model once it is spent.
-- **Follow-ups.** Prior turns are replayed as messages, so the model answers from history without a tool call when the answer is already in context.
+- **Follow-ups.** Prior turns arrive in the request and are replayed as messages, so the model answers from history without a tool call when the answer is already in context.
 - **Chat model seam.** The graph accepts a langchain-core `BaseChatModel`. `ingestion/llm.py` `build_chat_model()` constructs it from `LLM_PROVIDER` and `LLM_MODEL` (required, no default) and imports the provider package inside the branch that needs it.
 
 ## 4. TableRAG Tool
@@ -132,39 +132,16 @@ flowchart LR
 ```
 
 ### 4.2 Online loop
-```mermaid
-flowchart LR
-    start(["START"])
-    decompose["decompose"]
-    retrieve["retrieve"]
-    rerank["rerank"]
-    sql["sql"]
-    intermediate["intermediate_answer"]
-    finalize["finalize"]
-    finish(["END"])
+Decompose → retrieve → rerank → (SQL) → intermediate answer, repeated per subquery. The schema is fixed (`financial_metrics` joined to `documents` and `companies`) and fits in the prompt, so there is no per-document schema extraction; chunk metadata `(ticker, year, quarter)` supplies the filters. When retrieval and SQL both come back empty, the subgraph reports the gap and the chat agent decides whether to acquire.
 
-    start --> decompose
-    decompose -->|subquery| retrieve
-    decompose -->|answer| finalize
-    retrieve --> rerank
-    rerank -->|route_sql: table chunk or metric named| sql
-    rerank -->|text only| intermediate
-    sql --> intermediate
-    intermediate --> decompose
-    finalize --> finish
-```
-
-- The schema is fixed (`financial_metrics` joined to `documents` and `companies`) and fits in the prompt, so there is no per-document schema extraction. Chunk metadata `(ticker, year, quarter)` supplies SQL filters.
-- `route_sql` runs SQL when any reranked chunk has `is_table = true` or the subquery names a metric in `METRIC_FIELDS`.
-- SQL runs on a read-only transaction; the statement guard is defence in depth.
-- When retrieval and SQL both come back empty for a `(ticker, year, quarter)`, the subgraph reports the gap instead of acquiring. Acquisition is the chat agent's decision.
-- The result carries the answer, citations (`accession_number`, `chunk_index`, `heading_path`) and a per-subquery `steps` trace.
+Components, control flow, state and bounds: [RAG.md](RAG.md).
 
 ## 5. Tools and MCP
 Tools live in `api/tools/`. Like `api/v1` routes, they are thin: they call services and translate service exceptions into tool errors.
 
 | Tool | Backed by | Reads / writes |
 | --- | --- | --- |
+| `query_database(sql)` | `services/sql_query.py` as `llm_reader` | Supabase metrics (SQL); how it differs from TableRAG's SQL: [RAG.md §5](RAG.md#5-sql-in-tablerag-vs-query_database) |
 | `table_rag(question, tickers?, years?, quarters?)` | TableRAG subgraph → `services/chunk_retrieval.py`, `services/sql_query.py` | Supabase metrics (SQL) and chunks (pgvector) |
 | `list_available_filings(ticker?)` | `DocumentRepository` | Supabase `documents` and chunk counts |
 | `acquire_filing(ticker, year, quarter)` | `FilingImportService`, `FinancialMetricsImportService`, `DocumentChunkImportService` | SEC → Azure Blob → Supabase; re-chunks from the stored blob when the filing exists but has no chunks |
@@ -192,19 +169,13 @@ flowchart LR
 - **Rejected: a separate MCP Container App.** It adds a second deployment, a network hop and inter-app auth, with no scaling benefit at `max_replicas = 1`.
 
 ## 6. Conversation State
-Conversations are stored in two Alembic-managed tables. The graph runs without a LangGraph checkpointer: the chat service loads history, invokes the graph and persists the new turn.
+The server is stateless. The demo is a public page with no login, so there is no conversation to resume; the browser holds the conversation in memory and a refresh starts over.
 
-| Table | Columns | Constraints |
-| --- | --- | --- |
-| `conversations` | `id` UUID (`gen_random_uuid()`), `title` VARCHAR(255) null, timestamps | PK `id` |
-| `conversation_messages` | `id`, `conversation_id`, `position` INT, `role` VARCHAR(20), `content` TEXT, `trace` JSONB null, timestamps | FK `conversation_id` → `conversations.id` `ON DELETE CASCADE`; `UNIQUE (conversation_id, position)`; CHECK `role IN ('user', 'assistant')` |
-
-- Only user messages and final assistant answers are stored. Tool calls, citations and `steps` go in the assistant row's `trace`, so replayed context stays bounded.
-- **Rejected: `langgraph-checkpoint-postgres`.** It creates its own tables outside Alembic, the same reason `langchain-postgres` was rejected for the vector store. `migrations/versions/` stays the single source of truth for the schema.
-
-API:
-- `POST /api/v1/chat` — `{conversation_id?, message}` → `{conversation_id, answer, citations, steps}`.
-- `GET /api/v1/conversations/{id}` — the stored messages.
+- `POST /api/v1/chat` — `{messages: [{role: "user" | "assistant", content}]}` → `{answer, citations, steps, usage}`. The last message must be from the user; the history is capped at `CHAT_HISTORY_LIMIT` messages with a per-message length cap, and anything else is rejected with 422.
+- Only user messages and final answers are sent back. Tool calls are not replayed, so context stays bounded.
+- The client can forge assistant turns. The tools are bounded by `llm_reader`, the acquisition budget and `recursion_limit`, not by trusting history.
+- **Rejected: a server-side conversation store.** With no login it resumes nothing, and it adds tables, RLS and retained user messages.
+- **Rejected: `langgraph-checkpoint-postgres`.** It creates its own tables outside Alembic, the same reason `langchain-postgres` was rejected for the vector store.
 
 ## 7. Deployment
 Everything runs in the existing single Azure Container App (0.5 vCPU / 1 GiB, `max_replicas = 1`). No new Azure resource is added.

@@ -21,8 +21,16 @@ class ChatStepResponse(BaseModel):
     result: QueryDatabaseResponse
 
 
+class TokenUsageResponse(BaseModel):
+    """Tokens spent on chat model calls while answering."""
+
+    input_tokens: int
+    output_tokens: int
+
+
 class ChatResponse(BaseModel):
-    """Response payload with the agent's answer and the tool calls behind it."""
+    """Response payload with the agent's answer, the tool calls behind it and the tokens spent."""
 
     answer: str
     steps: list[ChatStepResponse]
+    usage: TokenUsageResponse

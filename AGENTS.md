@@ -9,18 +9,24 @@ When asked to update the code repository structure, only include the folders, do
 ```text
 .
 ├── .agents/ - Agent-specific project resources.
+├── .github/
+│   └── workflows/ - CI and the Azure deployment pipeline.
 ├── data/ - Generated datasets organized by ticker, year, and quarter.
 ├── docs/ - Project documentation and reference material.
-├── filings/ - Downloaded source financial filings.
 ├── iac/ - Azure infrastructure as code.
 │   ├── bootstrap/ - Bicep templates for the resource group and Terraform state backend.
 │   ├── environments/ - Terraform root modules, one per environment.
 │   └── modules/ - Reusable Terraform modules.
+├── papers/ - Reference papers (TableRAG, TAG).
 ├── src/ - Python source code for the application package.
 │   └── financial_data_agent/ - Main application package.
+│       ├── agent/ - LangGraph chat graph and schema prompt.
+│       │   └── tablerag/ - TableRAG subgraph: decomposition, retrieval, reranking and SQL.
+│       │       └── nodes/ - TableRAG graph nodes.
 │       ├── api/ - API endpoints, request models, and response models.
 │       │   ├── requests/ - API request schemas.
 │       │   ├── responses/ - API response schemas.
+│       │   ├── tools/ - Agent tools.
 │       │   └── v1/ - Version 1 API routes.
 │       ├── db/ - Database access, models, repositories, and schemas.
 │       │   ├── DTO/ - Data-transfer objects.
