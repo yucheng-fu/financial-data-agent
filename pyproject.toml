@@ -61,4 +61,4 @@ include = [
 ]
 
 [tool.vercel]
-entrypoint = "financial_data_agent.api.main:app"
+entrypoint = "src.financial_data_agent.api.main:app"
