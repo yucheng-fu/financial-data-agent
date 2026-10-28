@@ -138,7 +138,7 @@ The code is layered with one-way dependencies: API route or tool → agent → s
 
 ## Deployment
 
-The API is deployed to Vercel, with Postgres and the filings bucket on Supabase. CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline migrates the database and deploys to `test` and `prod`, and each GitHub environment requires an approval. The Vercel projects and Supabase buckets are created by hand; see [docs/deployment.md](docs/deployment.md) for the setup checklist and environment variables.
+The API is deployed to Vercel, with Postgres and the filings bucket on Supabase. CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline migrates the database and deploys to `test` and `prod`, creating each Vercel project on its first deploy, and each GitHub environment requires an approval. Only the Supabase buckets and the credentials are created by hand; see [docs/deployment.md](docs/deployment.md) for the setup checklist and configuration.
 
 ### Run the container locally
 
