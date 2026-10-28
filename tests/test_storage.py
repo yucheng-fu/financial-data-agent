@@ -1,15 +1,40 @@
 from pathlib import Path
 
 import pytest
+import requests
 
+from financial_data_agent.ingestion import storage as storage_module
 from financial_data_agent.ingestion.storage import (
     AzureBlobDataStorage,
     LocalDataStorage,
+    SupabaseDataStorage,
     build_data_storage,
     default_data_dir,
 )
 
 BLOB_NAME = "ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2/AAPL_2026_Q2.md"
+SUPABASE_URL = "https://abc.supabase.co"
+OBJECT_URL = f"{SUPABASE_URL}/storage/v1/object/filings/ticker%3DAAPL/year%3D2026/quarter%3DQ2/AAPL_2026_Q2/" + (
+    "AAPL_2026_Q2.md"
+)
+
+
+class FakeResponse:
+    """Stand in for a requests response from Supabase Storage."""
+
+    def __init__(self, status_code: int, content: bytes = b"", body: dict[str, str] | None = None) -> None:
+        self.status_code = status_code
+        self.content = content
+        self.body = body
+
+    def json(self) -> dict[str, str]:
+        if self.body is None:
+            raise ValueError("no JSON body")
+        return self.body
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"HTTP {self.status_code}")
 
 
 class FakeBlobDownloader:
@@ -130,38 +155,101 @@ def test_build_data_storage_defaults_to_the_repository_data_directory(monkeypatc
     assert storage.data_dir == default_data_dir()
 
 
-def test_build_data_storage_returns_azure_when_environment_is_test(monkeypatch, tmp_path: Path) -> None:
-    import azure.identity
-    import azure.storage.blob
+def test_supabase_data_storage_upserts_object_and_returns_blob_name(monkeypatch) -> None:
+    calls: list[tuple[str, bytes, dict[str, str]]] = []
 
-    recorded: dict[str, object] = {}
+    def fake_post(url: str, data: bytes, headers: dict[str, str], timeout: int) -> FakeResponse:
+        calls.append((url, data, headers))
+        return FakeResponse(200)
 
-    class FakeBlobServiceClient:
-        def __init__(self, account_url: str, credential: object) -> None:
-            recorded["account_url"] = account_url
-            recorded["credential"] = credential
+    monkeypatch.setattr(storage_module.requests, "post", fake_post)
+    storage = SupabaseDataStorage(SUPABASE_URL, "sb_secret_key", "filings")
 
-        def get_container_client(self, container: str) -> FakeContainerClient:
-            recorded["container"] = container
-            return FakeContainerClient()
+    location = storage.save_text(BLOB_NAME, "# Filing")
 
+    assert location == BLOB_NAME
+    assert calls == [
+        (
+            OBJECT_URL,
+            b"# Filing",
+            {"apikey": "sb_secret_key", "Authorization": "Bearer sb_secret_key", "x-upsert": "true"},
+        )
+    ]
+
+
+def test_supabase_data_storage_escapes_ampersand_in_object_name(monkeypatch) -> None:
+    urls: list[str] = []
+
+    def fake_post(url: str, data: bytes, headers: dict[str, str], timeout: int) -> FakeResponse:
+        urls.append(url)
+        return FakeResponse(200)
+
+    monkeypatch.setattr(storage_module.requests, "post", fake_post)
+
+    SupabaseDataStorage(SUPABASE_URL, "key", "filings").save_bytes("s&p500.parquet", b"PAR1")
+
+    assert urls == [f"{SUPABASE_URL}/storage/v1/object/filings/s%26p500.parquet"]
+
+
+def test_supabase_data_storage_raises_when_upload_is_rejected(monkeypatch) -> None:
+    monkeypatch.setattr(storage_module.requests, "post", lambda *args, **kwargs: FakeResponse(403))
+
+    with pytest.raises(requests.HTTPError):
+        SupabaseDataStorage(SUPABASE_URL, "key", "filings").save_text(BLOB_NAME, "# Filing")
+
+
+def test_supabase_data_storage_reads_text(monkeypatch) -> None:
+    urls: list[str] = []
+
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> FakeResponse:
+        urls.append(url)
+        return FakeResponse(200, content="# Filing é".encode())
+
+    monkeypatch.setattr(storage_module.requests, "get", fake_get)
+
+    content = SupabaseDataStorage(SUPABASE_URL, "key", "filings").read_text(BLOB_NAME)
+
+    assert content == "# Filing é"
+    assert urls == [OBJECT_URL]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [FakeResponse(404), FakeResponse(400, body={"statusCode": "404", "error": "not_found"})],
+)
+def test_supabase_data_storage_read_text_raises_file_not_found_for_a_missing_object(
+    monkeypatch, response: FakeResponse
+) -> None:
+    monkeypatch.setattr(storage_module.requests, "get", lambda *args, **kwargs: response)
+
+    with pytest.raises(FileNotFoundError, match=BLOB_NAME):
+        SupabaseDataStorage(SUPABASE_URL, "key", "filings").read_text(BLOB_NAME)
+
+
+def test_supabase_data_storage_read_text_raises_http_error_for_other_failures(monkeypatch) -> None:
+    monkeypatch.setattr(
+        storage_module.requests, "get", lambda *args, **kwargs: FakeResponse(400, body={"statusCode": "403"})
+    )
+
+    with pytest.raises(requests.HTTPError):
+        SupabaseDataStorage(SUPABASE_URL, "key", "filings").read_text(BLOB_NAME)
+
+
+def test_build_data_storage_returns_supabase_when_environment_is_test(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ENVIRONMENT", "test")
-    monkeypatch.setenv("STORAGE_ACCOUNT_NAME", "stfdatest")
-    monkeypatch.setenv("FILINGS_CONTAINER", "filings")
-    monkeypatch.setattr(azure.storage.blob, "BlobServiceClient", FakeBlobServiceClient)
-    monkeypatch.setattr(azure.identity, "DefaultAzureCredential", lambda: "credential")
+    monkeypatch.setenv("SUPABASE_URL", f"{SUPABASE_URL}/")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_key")
+    monkeypatch.setenv("FILINGS_BUCKET", "filings")
 
     storage = build_data_storage(tmp_path)
 
-    assert isinstance(storage, AzureBlobDataStorage)
-    assert recorded["account_url"] == "https://stfdatest.blob.core.windows.net"
-    assert recorded["credential"] == "credential"
-    assert recorded["container"] == "filings"
+    assert isinstance(storage, SupabaseDataStorage)
+    assert storage.object_url == f"{SUPABASE_URL}/storage/v1/object/filings"
 
 
-def test_build_data_storage_requires_storage_account_name(monkeypatch, tmp_path: Path) -> None:
+def test_build_data_storage_requires_supabase_url(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ENVIRONMENT", "test")
-    monkeypatch.delenv("STORAGE_ACCOUNT_NAME", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
 
-    with pytest.raises(RuntimeError, match="STORAGE_ACCOUNT_NAME"):
+    with pytest.raises(RuntimeError, match="SUPABASE_URL"):
         build_data_storage(tmp_path)

@@ -1,5 +1,7 @@
 # Financial Data Agent - Infrastructure
 
+> **Retired.** The Azure stack is no longer deployed and is kept for reference only. The current deployment is described in [docs/deployment.md](deployment.md).
+
 Design notes for the Azure infrastructure and the deployment pipeline. For the commands that provision an environment, see [iac/README.md](../iac/README.md).
 
 ## 1. Overview

@@ -59,3 +59,6 @@ include = [
   "pyproject.toml",
   "src",
 ]
+
+[tool.vercel]
+entrypoint = "financial_data_agent.api.main:app"

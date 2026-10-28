@@ -6,7 +6,8 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-agent-1C3C3C)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791?logo=postgresql&logoColor=white)
-![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform&logoColor=white)
+![Vercel](https://img.shields.io/badge/deploy-Vercel-000000?logo=vercel&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-3FCF8E?logo=supabase&logoColor=white)
 
 AI assistant for analysing earnings reports of S&P 500 companies. It combines structured financial data (SQL), semantic search over filings (RAG with pgvector) and on-demand SEC filing acquisition behind a FastAPI backend.
 
@@ -54,14 +55,14 @@ cp .env.example .env
 
 | Variable | Used by |
 | --- | --- |
-| `ENVIRONMENT` | filings storage: `local` writes to `data/`; `test` and `prod` use Azure Blob |
+| `ENVIRONMENT` | filings storage: `local` writes to `data/`; `test` and `prod` use the Supabase Storage bucket |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | the local Postgres container in [db/docker-compose.yaml](src/financial_data_agent/db/docker-compose.yaml) |
 | `DATABASE_URL` | [db/database.py](src/financial_data_agent/db/database.py) and [migrations/env.py](src/financial_data_agent/migrations/env.py); must match the three above |
 | `LLM_READER_DATABASE_URL` | the read-only login that model-generated SQL runs as |
 | `EMBEDDING_MODEL`, `EMBEDDING_CACHE_DIR` | the in-process embedding model (must produce 384 dimensions) and where it is cached |
 | `LLM_MODEL`, `GOOGLE_API_KEY` | the Gemini chat model; not in `.env.example`, so add both yourself |
 
-`.env` is gitignored and is for local development only. In `test` and `prod`, Terraform passes the values to the container app. See [docs/database.md](docs/database.md).
+`.env` is gitignored and is for local development only. In `test` and `prod` the values are Vercel environment variables. See [docs/deployment.md](docs/deployment.md).
 
 ### Database
 
@@ -114,10 +115,10 @@ Write migrations for `Vector` columns by hand, because autogenerate gets them wr
 
 ```text
 .
-├── .github/workflows/ - CI and the Azure deployment pipeline
+├── .github/workflows/ - CI and the Vercel deployment pipeline
 ├── data/ - Generated datasets organized by ticker, year, and quarter
 ├── docs/ - Design documents
-├── iac/ - Azure infrastructure as code
+├── iac/ - Retired Azure infrastructure as code, kept for reference
 │   ├── bootstrap/ - Bicep for the resource group and Terraform state backend
 │   ├── environments/ - Terraform root modules, one per environment
 │   └── modules/ - Reusable Terraform modules
@@ -137,9 +138,7 @@ The code is layered with one-way dependencies: API route or tool → agent → s
 
 ## Deployment
 
-The API is deployed to Azure Container Apps, with Postgres on Supabase. CI runs lint, type checks, tests and an image build on every pull request. On merge to `main`, the pipeline deploys to `test` and then `prod`. Each stage applies the infrastructure, migrates the database and deploys the image, and each GitHub environment requires an approval.
-
-Terraform owns the infrastructure, the pipeline owns the image tag, and `migrations/versions/` owns the schema. See [iac/README.md](iac/README.md) to provision an environment and [docs/infrastructure.md](docs/infrastructure.md) for the pipeline and the ownership split.
+The API is deployed to Vercel, with Postgres and the filings bucket on Supabase. CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline migrates the database and deploys to `test` and `prod`, creating each Vercel project on its first deploy, and each GitHub environment requires an approval. Only the Supabase buckets and the credentials are created by hand; see [docs/deployment.md](docs/deployment.md) for the setup checklist and configuration.
 
 ### Run the container locally
 
@@ -154,5 +153,6 @@ The API is then on <http://127.0.0.1:8000/docs>. On Windows and macOS, use `host
 
 - [Architecture](docs/architecture.md): target design, the chat agent, tools, MCP and deployment
 - [TableRAG](docs/RAG.md): components, control flow and contracts of the TableRAG subgraph
-- [Infrastructure](docs/infrastructure.md): Azure resources, resource ownership and the deployment pipeline
+- [Deployment](docs/deployment.md): Vercel and Supabase setup, environment variables, bundle size and the pipeline
+- [Infrastructure](docs/infrastructure.md): the retired Azure stack, kept for reference
 - [Database](docs/database.md): local and deployed Postgres, migrations and the Supabase connection string

@@ -1,7 +1,11 @@
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import quote
+
+import requests
 
 from financial_data_agent.config import is_local, require_env
+from financial_data_agent.constants import STORAGE_TIMEOUT_SECONDS
 
 
 def default_data_dir() -> Path:
@@ -222,21 +226,126 @@ class AzureBlobDataStorage:
             raise FileNotFoundError(f"{blob_name} was not found in the container") from error
 
 
+class SupabaseDataStorage:
+    """Store ingested data in a Supabase Storage bucket through its REST API."""
+
+    def __init__(self, base_url: str, secret_key: str, bucket: str) -> None:
+        """Initialize the storage.
+
+        Args:
+            base_url: Project URL, e.g. "https://<project_ref>.supabase.co".
+            secret_key: Secret API key of the project, which bypasses row level security.
+            bucket: Name of the bucket holding the ingested data.
+        """
+        self.object_url = f"{base_url.rstrip('/')}/storage/v1/object/{bucket}"
+        self.headers = {"apikey": secret_key, "Authorization": f"Bearer {secret_key}"}
+
+    def save_text(self, blob_name: str, content: str) -> str:
+        """Upload text content as a UTF-8 encoded object.
+
+        Args:
+            blob_name: Name of the object.
+            content: Text content.
+
+        Returns:
+            The name of the uploaded object.
+        """
+        return self.save_bytes(blob_name, content.encode("utf-8"))
+
+    def save_bytes(self, blob_name: str, content: bytes) -> str:
+        """Upload binary content as an object, replacing any existing one.
+
+        Args:
+            blob_name: Name of the object.
+            content: Binary content.
+
+        Returns:
+            The name of the uploaded object.
+
+        Raises:
+            requests.HTTPError: If the upload is rejected.
+        """
+        response = requests.post(
+            self._url(blob_name),
+            data=content,
+            headers={**self.headers, "x-upsert": "true"},
+            timeout=STORAGE_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        return blob_name
+
+    def read_text(self, blob_name: str) -> str:
+        """Download an object as UTF-8 text.
+
+        Args:
+            blob_name: Name of the object.
+
+        Returns:
+            The content of the object.
+
+        Raises:
+            FileNotFoundError: If the object does not exist.
+            requests.HTTPError: If the download fails for another reason.
+        """
+        response = requests.get(self._url(blob_name), headers=self.headers, timeout=STORAGE_TIMEOUT_SECONDS)
+        if is_missing_object(response):
+            raise FileNotFoundError(f"{blob_name} was not found in the bucket")
+        response.raise_for_status()
+        return response.content.decode("utf-8")
+
+    def _url(self, blob_name: str) -> str:
+        """Build the object URL, escaping characters such as "&" and "=" in the name.
+
+        Args:
+            blob_name: Name of the object.
+
+        Returns:
+            The object URL.
+        """
+        return f"{self.object_url}/{quote(blob_name)}"
+
+
+def is_missing_object(response: requests.Response) -> bool:
+    """Check whether a Supabase Storage response reports a missing object.
+
+    Storage reports a missing object either as HTTP 404 or as HTTP 400 whose body carries
+    `"statusCode": "404"`, depending on the server version.
+
+    Args:
+        response: Response of an object download.
+
+    Returns:
+        True when the object does not exist.
+    """
+    if response.status_code == 404:
+        return True
+    if response.status_code != 400:
+        return False
+    try:
+        return str(response.json().get("statusCode")) == "404"
+    except ValueError:
+        return False
+
+
 def build_data_storage(data_dir: Path | None = None) -> DataStorage:
     """Build the ingestion storage backend for the current environment.
+
+    `AzureBlobDataStorage` is kept from the retired Azure deployment but is no longer selected.
 
     Args:
         data_dir: Root directory used by the local storage backend.
 
     Returns:
-        Local storage in the local environment, Azure Blob storage otherwise.
+        Local storage in the local environment, Supabase Storage otherwise.
+
+    Raises:
+        RuntimeError: If a required Supabase environment variable is not set.
     """
     if is_local():
         return LocalDataStorage(data_dir if data_dir is not None else default_data_dir())
 
-    from azure.identity import DefaultAzureCredential
-    from azure.storage.blob import BlobServiceClient
-
-    account_url = f"https://{require_env('STORAGE_ACCOUNT_NAME')}.blob.core.windows.net"
-    service_client = BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
-    return AzureBlobDataStorage(service_client.get_container_client(require_env("FILINGS_CONTAINER")))
+    return SupabaseDataStorage(
+        base_url=require_env("SUPABASE_URL"),
+        secret_key=require_env("SUPABASE_SECRET_KEY"),
+        bucket=require_env("FILINGS_BUCKET"),
+    )

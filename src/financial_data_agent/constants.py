@@ -5,6 +5,7 @@ LOCAL_ENVIRONMENT = "local"
 SP500_WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies#S&P_500_component_stocks"
 SP500_PARQUET_NAME = "s&p500.parquet"
 SEC_IDENTITY = "MyName my.email@domain.com"
+STORAGE_TIMEOUT_SECONDS = 60
 
 EMBEDDING_DIMENSIONS = 384
 EMBEDDING_INDEX_NAME = "ix_document_chunks_embedding_hnsw"
