@@ -186,11 +186,10 @@ jobs:
           url="$(vercel deploy --prod --yes --token "$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      # vercel curl adds the deployment-protection bypass, so the new deployment's own
-      # URL can be checked without knowing the production domain.
+      # vercel curl bypasses deployment protection on the per-deployment URL.
       - name: Smoke check
         run: >
-          vercel curl "${{ steps.deploy.outputs.url }}/api/v1/cow" --token "$VERCEL_TOKEN"
+          vercel curl "${{ steps.deploy.outputs.url }}/api/v1/cow"
           -- --fail --silent --show-error
           --retry 10 --retry-all-errors --retry-delay 15
 
@@ -317,10 +316,9 @@ jobs:
           url="$(vercel deploy --prod --yes --token "$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      # vercel curl adds the deployment-protection bypass, so the new deployment's own
-      # URL can be checked without knowing the production domain.
+      # vercel curl bypasses deployment protection on the per-deployment URL.
       - name: Smoke check
         run: >
-          vercel curl "${{ steps.deploy.outputs.url }}/api/v1/cow" --token "$VERCEL_TOKEN"
+          vercel curl "${{ steps.deploy.outputs.url }}/api/v1/cow"
           -- --fail --silent --show-error
           --retry 10 --retry-all-errors --retry-delay 15
