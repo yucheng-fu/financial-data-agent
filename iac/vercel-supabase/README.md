@@ -1,12 +1,12 @@
 # Vercel and Supabase infrastructure
 
-Terraform roots, one per environment, for the Supabase project (`modules/supabase-postgres`) and the Vercel project with its environment variables (`modules/vercel-app`). State lives in each Supabase project's own `terraform-state` bucket.
+Terraform roots, one per environment, for the Supabase project (`modules/supabase-postgres`) and the Vercel project with its environment variables (`modules/vercel-app`). State lives under `terraform/` in each Supabase project's `bucket-fda-<env>` bucket, next to the filings.
 
 ## Prerequisites
 
 Once per environment (`test`, `prod`), by hand:
 
-1. In the Supabase project, create two **private** Storage buckets: `terraform-state` and `bucket-fda-<env>`. Neither Terraform provider can create buckets.
+1. In the Supabase project, create the **private** Storage bucket `bucket-fda-<env>`. It holds the filings and the Terraform state. Neither Terraform provider can create buckets.
 2. Under *Project Settings* → *Storage* → *S3 Connection*, enable S3 access and create an access key.
 3. Under *Project Settings* → *API Keys*, create or reuse a **secret** key (`sb_secret_...`).
 4. Create a Vercel token under *Account Settings* → *Tokens*. One token covers both environments.

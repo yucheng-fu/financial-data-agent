@@ -1,4 +1,4 @@
-# State lives in the private terraform-state bucket of this environment's own Supabase
+# State lives under terraform/ in this environment's filings bucket, in its own Supabase
 # project, through Storage's S3-compatible API. The endpoint and keys come from
 # AWS_ENDPOINT_URL_S3, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, set per GitHub
 # environment, because a backend block cannot read variables.
@@ -7,8 +7,8 @@
 # runs; try use_lockfile = true if Supabase Storage supports conditional writes.
 terraform {
   backend "s3" {
-    bucket = "terraform-state"
-    key    = "prod.tfstate"
+    bucket = "bucket-fda-prod"
+    key    = "terraform/prod.tfstate"
     region = "eu-north-1"
 
     use_path_style              = true

@@ -9,7 +9,7 @@ How `test` and `prod` run on Vercel and Supabase. The commands live in [iac/verc
 | API (FastAPI, whole app) | Vercel Function, Hobby plan, projects `fda-test` and `fda-prod` | Terraform (`modules/vercel-app`) creates the project and its env vars; `vercel.json` sets framework and region; the pipeline uploads the code |
 | Postgres + pgvector | Supabase projects `fda-test` and `fda-prod` | Terraform (`modules/supabase-postgres`) for the project and connection strings; `migrations/versions/` for the schema |
 | Filings (markdown, S&P 500 parquet) | Supabase Storage, private bucket `bucket-fda-<env>` | Created **by hand**; written by `SupabaseDataStorage` in `ingestion/storage.py` |
-| Terraform state | Supabase Storage, private bucket `terraform-state`, through its S3 API | Created **by hand** |
+| Terraform state | `terraform/<env>.tfstate` in the same bucket, through its S3 API | Terraform's `s3` backend |
 
 `iac/vercel-supabase/<env>` is one Terraform root per environment. It reuses `modules/supabase-postgres` unchanged from the Azure stack, so the database URLs are composed by Terraform as before, and adds `modules/vercel-app`.
 
@@ -23,12 +23,11 @@ flowchart LR
         pooler["Session pooler :5432"]
         pg[("Postgres + pgvector")]
         bucket[("Storage\nbucket-fda-env")]
-        state[("Storage\nterraform-state")]
     end
     sec["SEC EDGAR"]
     gemini["Gemini API"]
 
-    gh -->|terraform apply, S3 API| state
+    gh -->|terraform state, S3 API| bucket
     gh -->|alembic upgrade head| pooler
     gh -->|vercel deploy --prod| fn
     fn --> pooler --> pg
@@ -41,8 +40,8 @@ flowchart LR
 
 Neither the Supabase nor the Vercel Terraform provider can create Storage buckets, so these are made by hand, once per environment:
 
-- **The filings bucket `bucket-fda-<env>`.** It must exist and be **private** before the first import. The app only reads and writes objects in it; nothing creates it.
-- **The state bucket `terraform-state`**, also private, plus an **S3 access key** for it under *Project Settings* → *Storage* → *S3 Connection*.
+- **The bucket `bucket-fda-<env>`**, **private**. It holds both the filings and the Terraform state, so it must exist before the first `terraform init`. Nothing creates it.
+- **An S3 access key** under *Project Settings* → *Storage* → *S3 Connection*, for the state backend.
 - **A secret API key** (`sb_secret_...`), which the app uses for Storage.
 - **A Vercel token**, shared by both environments.
 - **The GitHub secrets and variable** in section 3.
@@ -91,6 +90,7 @@ The `s3` backend talks to Supabase Storage's S3-compatible endpoint. Each enviro
 - **No lock.** Supabase Storage is not known to support the conditional writes behind `use_lockfile`. The workflow's per-environment concurrency group is what keeps two applies from overlapping. Do not run `apply` locally while a deploy is running.
 - **The state holds every secret Terraform touches**: database passwords, connection strings and the API keys passed to Vercel. That is why the bucket is private and the S3 keys exist only in GitHub. Storage S3 keys bypass row level security across all buckets in the project.
 - **The state lives inside the project it describes.** Deleting the project deletes its state, which is acceptable because there would be nothing left to manage.
+- **The state shares the filings bucket**, under `terraform/<env>.tfstate`, to keep the manual setup to one bucket. The app only writes under `ticker=…/` and `s&p500.parquet`, so the keys never collide. Never empty or delete the bucket to reset the filings: that would also delete the state, and the next apply would try to recreate the Supabase project.
 
 ## 5. Adopting the existing projects
 
