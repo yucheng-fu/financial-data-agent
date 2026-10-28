@@ -1,5 +1,12 @@
-# Same module address as in iac/environments, so the state moved over from the Azure
-# backend matches it without an import. See iac/vercel-supabase/README.md.
+# The project predates this root, so it is adopted rather than created. Once it is in
+# state this is a no-op, and it re-adopts the project if the state is ever lost. The
+# provider never reads the password back, so the first apply after an import sets it to
+# var.supabase_db_password, the same value the connection strings are built from.
+import {
+  to = module.supabase_postgres.supabase_project.this
+  id = var.supabase_project_ref
+}
+
 module "supabase_postgres" {
   source = "../../modules/supabase-postgres"
 

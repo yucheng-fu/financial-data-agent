@@ -11,47 +11,31 @@ Once per environment (`test`, `prod`), by hand:
 3. Under *Project Settings* → *API Keys*, create or reuse a **secret** key (`sb_secret_...`).
 4. Create a Vercel token under *Account Settings* → *Tokens*. One token covers both environments.
 5. Add the GitHub environment secrets and variable listed in [docs/deployment.md](../../docs/deployment.md#3-configuration).
-6. If a Vercel project `fda-<env>` already exists, delete it, so Terraform can create it.
+6. If you created a Vercel project `fda-<env>` by hand, delete it, so Terraform can create it. One the pipeline created is already in Terraform's state; leave it.
 
-## Adopt the existing Supabase project (once per environment)
+## Adopt the existing Supabase project
 
-The project's state is moved from the retired Azure backend. Do not `import` it, see [docs/deployment.md](../../docs/deployment.md#5-adopting-the-existing-projects). Run this in Git Bash from the repository root: PowerShell 5.1's `>` writes UTF-16, which `terraform state push` rejects.
+The Supabase projects predate these roots, so each root imports its project with an `import` block keyed by `supabase_project_ref` in `terraform.tfvars`. Nothing is run by hand: the first CI apply imports the project, and the block is a no-op from then on. See [docs/deployment.md](../../docs/deployment.md#5-adopting-the-existing-projects).
+
+Set `supabase_project_ref` in `<env>/terraform.tfvars` to the ref from the project's dashboard URL, `supabase.com/dashboard/project/<ref>`.
+
+## Plan locally
+
+With the same values the pipeline uses:
 
 ```bash
 ENV=test
-TMP="$(mktemp -d)"
-
-az login
-az account set --subscription <AZURE_SUBSCRIPTION_ID>
-terraform -chdir=iac/environments/$ENV init -input=false
-terraform -chdir=iac/environments/$ENV state pull > "$TMP/azure.tfstate"
-
-(cd "$TMP" && terraform state mv -state=azure.tfstate -state-out=new.tfstate module.supabase_postgres module.supabase_postgres)
-
 export AWS_ENDPOINT_URL_S3="https://<project_ref>.storage.supabase.co/storage/v1/s3"
-export AWS_ACCESS_KEY_ID="<S3 access key ID>"
-export AWS_SECRET_ACCESS_KEY="<S3 secret access key>"
-terraform -chdir=iac/vercel-supabase/$ENV init -input=false
-terraform -chdir=iac/vercel-supabase/$ENV state push "$TMP/new.tfstate"
-```
-
-Then plan, with the same values the pipeline uses:
-
-```bash
+export AWS_ACCESS_KEY_ID="<S3 access key ID>" AWS_SECRET_ACCESS_KEY="<S3 secret access key>"
 export SUPABASE_ACCESS_TOKEN="..." VERCEL_API_TOKEN="..."
 export TF_VAR_supabase_db_password="..." TF_VAR_llm_reader_db_password="..."
 export TF_VAR_supabase_secret_key="..." TF_VAR_google_api_key="..."
+terraform -chdir=iac/vercel-supabase/$ENV init -input=false
 terraform -chdir=iac/vercel-supabase/$ENV plan
 ```
 
-The plan must show `2 to add, 0 to change, 0 to destroy`: the Vercel project and its environment variables. Then delete the temporary files, which contain the database passwords:
-
-```bash
-rm -r "$TMP"
-```
-
-Repeat with `ENV=prod`. After that, CI runs `init`, `plan` and `apply` on every push to `main`.
+On the first run the plan shows `1 to import` for the Supabase project, plus an in-place update of its `database_password`, which the API never returns. Do not run `apply` locally while a deploy is running: the state has no lock.
 
 ## Further reading
 
-[docs/deployment.md](../../docs/deployment.md) — configuration, the state backend, why the state is moved rather than imported, and the pipeline.
+[docs/deployment.md](../../docs/deployment.md) — configuration, the state backend, how the existing projects are adopted, and the pipeline.

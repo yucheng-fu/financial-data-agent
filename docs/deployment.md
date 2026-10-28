@@ -45,7 +45,7 @@ Neither the Supabase nor the Vercel Terraform provider can create Storage bucket
 - **A secret API key** (`sb_secret_...`), which the app uses for Storage.
 - **A Vercel token**, shared by both environments.
 - **The GitHub secrets and variable** in section 3.
-- **The one-time state move** in section 5.
+- **The project ref** in each root's `terraform.tfvars`, see section 5.
 
 The steps are listed in order in [iac/vercel-supabase/README.md](../iac/vercel-supabase/README.md).
 
@@ -90,19 +90,20 @@ The `s3` backend talks to Supabase Storage's S3-compatible endpoint. Each enviro
 - **No lock.** Supabase Storage is not known to support the conditional writes behind `use_lockfile`. The workflow's per-environment concurrency group is what keeps two applies from overlapping. Do not run `apply` locally while a deploy is running.
 - **The state holds every secret Terraform touches**: database passwords, connection strings and the API keys passed to Vercel. That is why the bucket is private and the S3 keys exist only in GitHub. Storage S3 keys bypass row level security across all buckets in the project.
 - **The state lives inside the project it describes.** Deleting the project deletes its state, which is acceptable because there would be nothing left to manage.
-- **The state shares the filings bucket**, under `terraform/<env>.tfstate`, to keep the manual setup to one bucket. The app only writes under `ticker=…/` and `s&p500.parquet`, so the keys never collide. Never empty or delete the bucket to reset the filings: that would also delete the state, and the next apply would try to recreate the Supabase project.
+- **The state shares the filings bucket**, under `terraform/<env>.tfstate`, to keep the manual setup to one bucket. The app only writes under `ticker=…/` and `s&p500.parquet`, so the keys never collide. Never empty or delete the bucket to reset the filings: that would also delete the state. The import block would re-adopt the Supabase project, but the Vercel project would have to be deleted by hand before Terraform could create it again.
 
 ## 5. Adopting the existing projects
 
-`fda-test` and `fda-prod` were created by the Azure-era Terraform, and their state is in the Azure storage account. They are adopted by moving that state into the new backend with `terraform state mv`, never by `import`:
+`fda-test` and `fda-prod` were created by the Azure-era Terraform, whose state was deleted with the Azure subscription. Each root therefore declares an `import` block for `module.supabase_postgres.supabase_project.this`, keyed by `supabase_project_ref` in `terraform.tfvars`:
 
-- `database_password`, `name`, `organization_id` and `region` on `supabase_project` **force replacement**.
-- The Supabase API never returns the password, so an imported project has none in state. The next plan would replace it: delete the project and its data, then create an empty one.
-- The moved state still carries the password Terraform set originally, so the first plan shows no changes to the project.
+- **First apply:** Terraform imports the project instead of creating it, so the database and its data are kept.
+- **Later applies:** the block is a no-op once the project is in state. It stays in the code, so a lost state re-adopts the project rather than failing on a duplicate name.
 
-As a guard, `modules/supabase-postgres` sets `prevent_destroy` on the project, so any plan that would replace it fails instead. If the Azure state is ever lost, adopting by import also needs `lifecycle { ignore_changes = [database_password] }` on the project.
+The provider reads every attribute back from the API except `database_password`, which the API never returns. The first plan after an import therefore shows an in-place update of the password. Applying it sets the database password to `SUPABASE_DB_PASSWORD`, the same value the module builds `DATABASE_URL` from, so the two can never disagree. If they already match, the update changes nothing. None of the project's attributes force replacement in provider v1.11.0, so an import never recreates the project.
 
-The roots keep the module address `module.supabase_postgres` and the same name, organization and region as `iac/environments/<env>`, so the moved state matches without edits.
+The same mechanism makes the GitHub secret the source of truth for the password. To rotate it, change `SUPABASE_DB_PASSWORD` and deploy: Terraform updates the database and the Vercel `DATABASE_URL` together. `LLM_READER_DB_PASSWORD` is different, because a migration sets it on the role, see [database.md](database.md).
+
+`modules/supabase-postgres` also sets `prevent_destroy` on the project, so a plan that would delete it, e.g. after the module is removed from a root by mistake, fails instead.
 
 ## 6. Bundle size
 

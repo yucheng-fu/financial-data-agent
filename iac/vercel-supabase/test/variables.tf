@@ -18,6 +18,16 @@ variable "supabase_region" {
   description = "Supabase region, also the region of the S3 state backend"
 }
 
+variable "supabase_project_ref" {
+  type        = string
+  description = "Ref of the existing Supabase project to adopt, from its dashboard URL"
+
+  validation {
+    condition     = can(regex("^[a-z]{20}$", var.supabase_project_ref))
+    error_message = "A Supabase project ref is 20 lowercase letters, as in supabase.com/dashboard/project/<ref>."
+  }
+}
+
 variable "supabase_instance_size" {
   type        = string
   description = "Paid plan instance size. Null leaves the plan default, which the free tier requires"

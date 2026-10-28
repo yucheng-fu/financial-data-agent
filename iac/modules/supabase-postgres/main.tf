@@ -21,8 +21,8 @@ resource "supabase_project" "this" {
     create = "30m"
   }
 
-  # database_password, name, organization_id and region all force replacement, which
-  # would drop the database. Fail the plan instead.
+  # Destroying the project drops the database and the bucket holding the Terraform state.
+  # Fail the plan instead, e.g. if the module is removed from a root by mistake.
   lifecycle {
     prevent_destroy = true
   }
