@@ -131,7 +131,7 @@ The chat route imports none of the ingestion-only packages, so this split needs 
 - **Cold starts** import polars, pyarrow and edgartools, because `api/main.py` registers every router, and they download the embedding model. Expect several seconds on the first request to a new instance.
 - **Pooler connections.** Each function instance keeps its own SQLAlchemy pool on the session pooler, whose pool size is small on the free tier. If concurrent instances exhaust it, move the app's URL to the transaction pooler (port 6543) with psycopg's `prepare_threshold=None`; Alembic must stay on the session pooler.
 - **Hobby is for non-commercial use** under Vercel's terms.
-- **Free Supabase projects pause** after 7 days of inactivity, which fails both the deploy job and the app.
+- **Free Supabase projects pause** after 7 days of inactivity, which fails both the migration job and the app.
 
 ## 8. Deployment pipeline
 
