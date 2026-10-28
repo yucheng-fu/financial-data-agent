@@ -1,0 +1,12 @@
+.venv/
+.github/
+.agents/
+data/
+docs/
+graphify-out/
+iac/
+papers/
+tests/
+Dockerfile
+.dockerignore
+.env

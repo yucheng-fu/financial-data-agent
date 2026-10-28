@@ -1,5 +1,7 @@
 # Setting up infrastructure
 
+> **Retired.** The Azure stack is no longer deployed and is kept for reference only. The current deployment is described in [docs/deployment.md](../docs/deployment.md).
+
 Bicep (`bootstrap/`) creates the resource group, the Terraform state storage account and the service principal's role assignments. Terraform (`environments/`, `modules/`) creates everything else: the container registry, the app's identity, the `filings` container, the container app and the Supabase Postgres project.
 
 Run the bootstrap once per environment, locally. CI runs Terraform on every push to `main`.

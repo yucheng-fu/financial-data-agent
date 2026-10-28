@@ -23,7 +23,7 @@ flowchart TD
     user["User"]
     mcp_client["MCP Client\n(Claude Desktop, IDE)"]
 
-    subgraph App["Container App (FastAPI)"]
+    subgraph App["Vercel Function (FastAPI)"]
         chat_route["POST /api/v1/chat"]
         mcp_server["/mcp\n(FastMCP, bearer token)"]
         chat_graph["Chat Graph\n(LangGraph)"]
@@ -41,7 +41,7 @@ flowchart TD
 
     llm["Hosted Chat Model API"]
     sec["SEC EDGAR"]
-    blob[("Azure Blob\n(filings container)")]
+    blob[("Supabase Storage\n(filings bucket)")]
 
     subgraph Supabase["PostgreSQL (Supabase)"]
         metrics[("financial_metrics\ncompanies, documents")]
@@ -118,7 +118,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     sec["SEC EDGAR"]
-    blob[("Azure Blob\n(markdown filing)")]
+    blob[("Supabase Storage\n(markdown filing)")]
     metrics[("financial_metrics")]
     chunker["Table-aware markdown chunker"]
     embedder["fastembed\n(bge-small-en-v1.5)"]
@@ -144,7 +144,7 @@ Tools live in `api/tools/`. Like `api/v1` routes, they are thin: they call servi
 | `query_database(sql)` | `services/sql_query.py` as `llm_reader` | Supabase metrics (SQL); how it differs from TableRAG's SQL: [RAG.md §5](RAG.md#5-sql-in-tablerag-vs-query_database) |
 | `table_rag(question, tickers?, years?, quarters?)` | TableRAG subgraph → `services/chunk_retrieval.py`, `services/sql_query.py` | Supabase metrics (SQL) and chunks (pgvector) |
 | `list_available_filings(ticker?)` | `DocumentRepository` | Supabase `documents` and chunk counts |
-| `acquire_filing(ticker, year, quarter)` | `FilingImportService`, `FinancialMetricsImportService`, `DocumentChunkImportService` | SEC → Azure Blob → Supabase; re-chunks from the stored blob when the filing exists but has no chunks |
+| `acquire_filing(ticker, year, quarter)` | `FilingImportService`, `FinancialMetricsImportService`, `DocumentChunkImportService` | SEC → Supabase Storage → Postgres; re-chunks from the stored blob when the filing exists but has no chunks |
 
 The agent never reads raw blobs. Chunks are the retrievable form of a filing, and `DocumentChunkImportService` reads the blob through `DataStorage.read_text`.
 
@@ -165,8 +165,8 @@ flowchart LR
 
 - **In process.** The chat graph binds the functions directly and receives the request's session. There is no MCP hop for the app's own agent.
 - **Over MCP.** `api/tools/mcp_server.py` registers the functions on a `FastMCP` server with `stateless_http=True`, mounted at `/mcp` via `streamable_http_app()`. Each call opens its own session from `get_session_factory()`. The FastAPI `lifespan` must run `mcp.session_manager.run()`; without it the mount fails on the first request.
-- **Auth.** `/mcp` is on the Container App's public ingress. Requests must carry a bearer token matching `MCP_API_KEY`. `acquire_filing` is a write path and is never exposed without it.
-- **Rejected: a separate MCP Container App.** It adds a second deployment, a network hop and inter-app auth, with no scaling benefit at `max_replicas = 1`.
+- **Auth.** `/mcp` is on the Vercel Function's public URL. Requests must carry a bearer token matching `MCP_API_KEY`. `acquire_filing` is a write path and is never exposed without it.
+- **Rejected: a separate MCP deployment.** It adds a second Vercel project, a network hop and inter-app auth, with no scaling benefit.
 
 ## 6. Conversation State
 The server is stateless. The demo is a public page with no login, so there is no conversation to resume; the browser holds the conversation in memory and a refresh starts over.
@@ -178,9 +178,9 @@ The server is stateless. The demo is a public page with no login, so there is no
 - **Rejected: `langgraph-checkpoint-postgres`.** It creates its own tables outside Alembic, the same reason `langchain-postgres` was rejected for the vector store.
 
 ## 7. Deployment
-Everything runs in the existing single Azure Container App (0.5 vCPU / 1 GiB, `max_replicas = 1`). No new Azure resource is added.
+Everything runs in the existing single Vercel Function (Hobby: 2 GB / 1 vCPU, 300 s per request), see [deployment.md](deployment.md). No new resource is added.
 
 - **Embeddings** run in process with `fastembed` on onnxruntime, for both ingestion and queries.
-- **The chat model is an external hosted API** with a free tier, called over HTTPS. It is not self-hosted — a chat model does not fit the container's CPU and memory, and CPU inference is too slow for the multi-step TableRAG loop. Azure AI Foundry and Azure OpenAI are not used. It is the Gemini API free tier; the provider must support tool calling, and the evaluation harness chooses the model.
+- **The chat model is an external hosted API** with a free tier, called over HTTPS. It is not self-hosted — a chat model does not fit the function's CPU and memory, and CPU inference is too slow for the multi-step TableRAG loop. Azure AI Foundry and Azure OpenAI are not used. It is the Gemini API free tier; the provider must support tool calling, and the evaluation harness chooses the model.
 - **Secrets** follow the existing Terraform `secrets` / `secret_env_vars` pattern: `database-url`, the LLM API key and `MCP_API_KEY`. `LLM_PROVIDER` and `LLM_MODEL` are plain `env_vars`. The container-app module is unchanged.
 - **Privacy.** Free tiers may use prompts for training. Filings are public; user messages are not. The chosen tier's data terms are part of the provider decision.
