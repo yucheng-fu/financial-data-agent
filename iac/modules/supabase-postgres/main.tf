@@ -20,6 +20,12 @@ resource "supabase_project" "this" {
   timeouts {
     create = "30m"
   }
+
+  # database_password, name, organization_id and region all force replacement, which
+  # would drop the database. Fail the plan instead.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "supabase_pooler" "this" {

@@ -46,21 +46,74 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run pytest
 
-  migrate-db-test:
-    name: Migrate database (test)
+      - name: Set up Terraform
+        if: ${{ !cancelled() }}
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Terraform format
+        if: ${{ !cancelled() }}
+        run: terraform fmt -check -recursive iac/vercel-supabase iac/modules
+
+      # -backend=false: validation needs the providers, not the state.
+      - name: Terraform validate
+        if: ${{ !cancelled() }}
+        run: |
+          for root in iac/vercel-supabase/test iac/vercel-supabase/prod; do
+            terraform -chdir="$root" init -backend=false -input=false
+            terraform -chdir="$root" validate
+          done
+
+  # One job per environment: every step reads the same Terraform state, and keeping the
+  # connection strings inside a single job means they are never passed as job outputs,
+  # which are not masked.
+  deploy-test:
+    name: Deploy (test)
     needs: checks
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
     concurrency:
-      group: migrate-db-test
+      group: deploy-test
       cancel-in-progress: false
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      LLM_READER_DATABASE_URL: ${{ secrets.LLM_READER_DATABASE_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+      AWS_ENDPOINT_URL_S3: ${{ vars.TF_STATE_S3_ENDPOINT }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      TF_VAR_llm_reader_db_password: ${{ secrets.LLM_READER_DB_PASSWORD }}
+      TF_VAR_supabase_secret_key: ${{ secrets.SUPABASE_SECRET_KEY }}
+      TF_VAR_google_api_key: ${{ secrets.GOOGLE_API_KEY }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      # terraform_wrapper is off because the wrapper publishes Terraform's stdout as an
+      # unmasked step output, which would expose the connection strings.
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform apply
+        working-directory: iac/vercel-supabase/test
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -out=tfplan
+          terraform apply -input=false -auto-approve tfplan
+
+      - name: Read database URLs from Terraform state
+        working-directory: iac/vercel-supabase/test
+        run: |
+          url="$(terraform output -raw database_url)"
+          echo "::add-mask::$url"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+          reader_url="$(terraform output -raw llm_reader_database_url)"
+          echo "::add-mask::$reader_url"
+          echo "LLM_READER_DATABASE_URL=$reader_url" >> "$GITHUB_ENV"
+          echo "VERCEL_PROJECT_NAME=$(terraform output -raw vercel_project_name)" >> "$GITHUB_ENV"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
@@ -71,85 +124,78 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      # migrations/env.py requires DATABASE_URL. Its load_dotenv() call finds no
-      # .env here, since .env is gitignored, so the secret is the only source.
       - name: Alembic upgrade head
         working-directory: src/financial_data_agent
         run: uv run alembic upgrade head
 
-  deploy-app-test:
-    name: Deploy app (test)
-    needs: migrate-db-test
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    environment: test
-    concurrency:
-      group: deploy-app-test
-      cancel-in-progress: false
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # Creates the project on the first run and reuses it afterwards.
-      - name: Link Vercel project
-        run: vercel link --yes --project fda-test --token "$VERCEL_TOKEN"
-
-      # Config is passed per deployment so the GitHub environment is its only source.
+      # Terraform owns the project and its environment variables; the CLI only uploads
+      # the source of this commit.
       - name: Deploy to Vercel
         id: deploy
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          LLM_READER_DATABASE_URL: ${{ secrets.LLM_READER_DATABASE_URL }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-          FILINGS_BUCKET: ${{ vars.FILINGS_BUCKET }}
         run: |
-          runtime_env=(
-            --env ENVIRONMENT=test
-            --env EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
-            --env EMBEDDING_CACHE_DIR=/tmp/fastembed
-            --env EDGAR_LOCAL_DATA_DIR=/tmp/edgar
-            --env DATABASE_URL="$DATABASE_URL"
-            --env LLM_READER_DATABASE_URL="$LLM_READER_DATABASE_URL"
-            --env SUPABASE_URL="$SUPABASE_URL"
-            --env SUPABASE_SECRET_KEY="$SUPABASE_SECRET_KEY"
-            --env GOOGLE_API_KEY="$GOOGLE_API_KEY"
-            --env LLM_MODEL="$LLM_MODEL"
-            --env FILINGS_BUCKET="$FILINGS_BUCKET"
-          )
-          url="$(vercel deploy --prod --yes --token "$VERCEL_TOKEN" "${runtime_env[@]}")"
+          vercel link --yes --project "$VERCEL_PROJECT_NAME" --token "$VERCEL_TOKEN"
+          url="$(vercel deploy --prod --yes --token "$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      # vercel curl adds the deployment-protection bypass, so the new deployment's
-      # own URL can be checked without knowing the production domain.
+      # vercel curl adds the deployment-protection bypass, so the new deployment's own
+      # URL can be checked without knowing the production domain.
       - name: Smoke check
         run: >
           vercel curl "${{ steps.deploy.outputs.url }}/api/v1/cow" --token "$VERCEL_TOKEN"
           -- --fail --silent --show-error
           --retry 10 --retry-all-errors --retry-delay 15
 
-  migrate-db-prod:
-    name: Migrate database (prod)
+  deploy-prod:
+    name: Deploy (prod)
     needs: checks
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: prod
     concurrency:
-      group: migrate-db-prod
+      group: deploy-prod
       cancel-in-progress: false
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      LLM_READER_DATABASE_URL: ${{ secrets.LLM_READER_DATABASE_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+      AWS_ENDPOINT_URL_S3: ${{ vars.TF_STATE_S3_ENDPOINT }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      TF_VAR_llm_reader_db_password: ${{ secrets.LLM_READER_DB_PASSWORD }}
+      TF_VAR_supabase_secret_key: ${{ secrets.SUPABASE_SECRET_KEY }}
+      TF_VAR_google_api_key: ${{ secrets.GOOGLE_API_KEY }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      # terraform_wrapper is off because the wrapper publishes Terraform's stdout as an
+      # unmasked step output, which would expose the connection strings.
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform apply
+        working-directory: iac/vercel-supabase/prod
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -out=tfplan
+          terraform apply -input=false -auto-approve tfplan
+
+      - name: Read database URLs from Terraform state
+        working-directory: iac/vercel-supabase/prod
+        run: |
+          url="$(terraform output -raw database_url)"
+          echo "::add-mask::$url"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+          reader_url="$(terraform output -raw llm_reader_database_url)"
+          echo "::add-mask::$reader_url"
+          echo "LLM_READER_DATABASE_URL=$reader_url" >> "$GITHUB_ENV"
+          echo "VERCEL_PROJECT_NAME=$(terraform output -raw vercel_project_name)" >> "$GITHUB_ENV"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
@@ -160,64 +206,24 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      # migrations/env.py requires DATABASE_URL. Its load_dotenv() call finds no
-      # .env here, since .env is gitignored, so the secret is the only source.
       - name: Alembic upgrade head
         working-directory: src/financial_data_agent
         run: uv run alembic upgrade head
 
-  deploy-app-prod:
-    name: Deploy app (prod)
-    needs: migrate-db-prod
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    environment: prod
-    concurrency:
-      group: deploy-app-prod
-      cancel-in-progress: false
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # Creates the project on the first run and reuses it afterwards.
-      - name: Link Vercel project
-        run: vercel link --yes --project fda-prod --token "$VERCEL_TOKEN"
-
-      # Config is passed per deployment so the GitHub environment is its only source.
+      # Terraform owns the project and its environment variables; the CLI only uploads
+      # the source of this commit.
       - name: Deploy to Vercel
         id: deploy
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          LLM_READER_DATABASE_URL: ${{ secrets.LLM_READER_DATABASE_URL }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-          FILINGS_BUCKET: ${{ vars.FILINGS_BUCKET }}
         run: |
-          runtime_env=(
-            --env ENVIRONMENT=prod
-            --env EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
-            --env EMBEDDING_CACHE_DIR=/tmp/fastembed
-            --env EDGAR_LOCAL_DATA_DIR=/tmp/edgar
-            --env DATABASE_URL="$DATABASE_URL"
-            --env LLM_READER_DATABASE_URL="$LLM_READER_DATABASE_URL"
-            --env SUPABASE_URL="$SUPABASE_URL"
-            --env SUPABASE_SECRET_KEY="$SUPABASE_SECRET_KEY"
-            --env GOOGLE_API_KEY="$GOOGLE_API_KEY"
-            --env LLM_MODEL="$LLM_MODEL"
-            --env FILINGS_BUCKET="$FILINGS_BUCKET"
-          )
-          url="$(vercel deploy --prod --yes --token "$VERCEL_TOKEN" "${runtime_env[@]}")"
+          vercel link --yes --project "$VERCEL_PROJECT_NAME" --token "$VERCEL_TOKEN"
+          url="$(vercel deploy --prod --yes --token "$VERCEL_TOKEN")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      # vercel curl adds the deployment-protection bypass, so the new deployment's
-      # own URL can be checked without knowing the production domain.
+      # vercel curl adds the deployment-protection bypass, so the new deployment's own
+      # URL can be checked without knowing the production domain.
       - name: Smoke check
         run: >
           vercel curl "${{ steps.deploy.outputs.url }}/api/v1/cow" --token "$VERCEL_TOKEN"

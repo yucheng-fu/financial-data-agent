@@ -13,10 +13,11 @@ When asked to update the code repository structure, only include the folders, do
 │   └── workflows/ - CI and the Vercel deployment pipeline.
 ├── data/ - Generated datasets organized by ticker, year, and quarter.
 ├── docs/ - Project documentation and reference material.
-├── iac/ - Retired Azure infrastructure as code, kept for reference.
-│   ├── bootstrap/ - Bicep templates for the resource group and Terraform state backend.
-│   ├── environments/ - Terraform root modules, one per environment.
-│   └── modules/ - Reusable Terraform modules.
+├── iac/ - Infrastructure as code.
+│   ├── bootstrap/ - Retired: Bicep templates for the Azure resource group and Terraform state backend.
+│   ├── environments/ - Retired: Azure Terraform root modules, kept for reference.
+│   ├── modules/ - Reusable Terraform modules.
+│   └── vercel-supabase/ - Terraform root modules for Supabase and Vercel, one per environment.
 ├── papers/ - Reference papers (TableRAG, TAG).
 ├── src/ - Python source code for the application package.
 │   └── financial_data_agent/ - Main application package.
@@ -94,7 +95,7 @@ Uses `uv` (Python >=3.11).
 - Migrations (run from `src/financial_data_agent/`, where the working `alembic.ini` and `migrations/` live): `alembic revision --autogenerate -m "name"` then `alembic upgrade head`
 - API: `uv run fastapi dev src/financial_data_agent/api/main.py`
 
-`.env` must define `DATABASE_URL` (used by both `db/database.py` and `migrations/env.py`). `ENVIRONMENT` selects the filings storage backend and defaults to `local`; Vercel sets it to `test`/`prod` alongside `SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `FILINGS_BUCKET`, which `storage.py` requires in those environments. See `docs/deployment.md`.
+`.env` must define `DATABASE_URL` (used by both `db/database.py` and `migrations/env.py`). `ENVIRONMENT` selects the filings storage backend and defaults to `local`; Terraform sets it on the Vercel project to `test`/`prod` alongside `SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `FILINGS_BUCKET`, which `storage.py` requires in those environments. See `docs/deployment.md`.
 
 ### Agent guardrails
 - Keep test updates close to behavior changes and use explicit test names describing what is validated.

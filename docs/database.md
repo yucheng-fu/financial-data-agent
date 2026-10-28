@@ -30,7 +30,7 @@ Any new model must be added to `db/models/__init__.py`, otherwise `--autogenerat
 
 ## 4. Deployed environments and secrets
 
-> The Terraform described in this section and the next is retired along with the Azure stack. The projects still exist, and their connection strings are now set by hand as GitHub and Vercel secrets, see [deployment.md](deployment.md#3-vercel-environment-variables).
+> The same `modules/supabase-postgres` now runs from `iac/vercel-supabase/<env>` instead of the retired Azure roots, and passes the URLs to the Vercel project instead of the container app. State is read with `terraform -chdir=iac/vercel-supabase/<env> output`. See [deployment.md](deployment.md).
 
 Each environment has its own Supabase project, created by `modules/supabase-postgres`. The pipeline's `Migrate database (<env>)` job then runs `alembic upgrade head` against it, and the app deploy is gated on that job so a new image never reaches a database that is behind it.
 
