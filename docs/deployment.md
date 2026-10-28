@@ -137,24 +137,24 @@ The chat route imports none of the ingestion-only packages, so this split needs 
 
 `.github/workflows/deployment-pipeline.yml`:
 
-```mermaid
-flowchart LR
-    checks["checks\nruff, pyrefly, pytest,\nterraform fmt + validate"]
-    checks --> dt["deploy (test)"]
-    checks --> dp["deploy (prod)"]
+The structure follows the retired Azure pipeline: per environment, an iac job, a migration job and an app job.
+
+```text
+checks ─┬─ iac (test) ── migrate (test) ── app (test)
+        └─ iac (prod) ── migrate (prod) ── app (prod)
 ```
 
 **checks** runs on every pull request, with Python 3.12, the oldest version Vercel supports. Its Terraform steps run `init -backend=false`, so they need no state or secrets.
 
-**deploy** runs once per environment after a merge to `main`. It is a single job, because every step reads the same Terraform state, and the connection strings stay inside it rather than travelling as job outputs, which are not masked. Its steps, in order:
+**Deploy iac** runs `terraform init`, `plan` and `apply` on `iac/vercel-supabase/<env>`. It publishes the Vercel project name as a job output for the app job.
 
-1. **Terraform apply** on `iac/vercel-supabase/<env>`.
-2. **Read** `database_url` and `llm_reader_database_url` with `terraform output -raw`, masked with `::add-mask::`. `terraform_wrapper` is off, because the wrapper would publish them as unmasked step outputs.
-3. **Alembic** runs `alembic upgrade head`.
-4. **Vercel deploy:** `vercel link --project fda-<env>` to the project Terraform created, then `vercel deploy --prod`. This uploads the source and builds on Vercel from `pyproject.toml` and `uv.lock`; the runtime configuration comes from the project's env vars.
-5. **Smoke check:** `vercel curl <deployment-url>/api/v1/cow`. Vercel's standard deployment protection puts per-deployment URLs behind a login, and `vercel curl` adds a bypass token, which the CLI creates in the project's settings on first use.
+**Migrate database** runs `terraform init` and `terraform output -raw database_url` itself rather than reading a job output. Job outputs are not masked and are readable from the Actions API, so the connection strings stay inside the one job that needs them. It masks them with `::add-mask::` before writing them to `$GITHUB_ENV`, then runs `alembic upgrade head`. `terraform_wrapper` is off in this job, because the wrapper would publish Terraform's stdout as an unmasked step output.
 
-The deploy step runs after the migration, so new code never reaches a database that is behind it. The `prod` GitHub environment's approval is what holds prod back.
+**Deploy app** has two steps:
+1. `vercel link` to the project from the iac job, then `vercel deploy --prod`. This uploads the source and builds on Vercel from `pyproject.toml` and `uv.lock`; the runtime configuration comes from the project's env vars, which Terraform set.
+2. A smoke check, `vercel curl <deployment-url>/api/v1/cow`. Vercel's standard deployment protection puts per-deployment URLs behind a login, and `vercel curl` adds a bypass token, which the CLI creates in the project's settings on first use.
+
+The app deploy is gated on its migration, so new code never reaches a database that is behind it. What holds prod back is the `prod` GitHub environment's approval, not the test smoke check: the two branches are independent once `checks` passes.
 
 The Vercel project is not connected to Git, and `vercel.json` sets `git.deploymentEnabled: false`, so only this pipeline deploys. The retired Azure workflow is kept, unexecuted, at `iac/azure-deployment-pipelines.yml`.
 
