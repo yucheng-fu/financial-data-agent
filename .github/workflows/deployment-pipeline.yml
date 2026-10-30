@@ -63,18 +63,9 @@ jobs:
             terraform -chdir="$root" validate
           done
 
-  approve:
-    name: Approve deployment
-    needs: checks
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    environment: deployment-approval
-    steps:
-      - run: echo "Approved"
-
   deploy-iac-test:
     name: Deploy iac (test)
-    needs: approve
+    needs: checks
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
@@ -195,7 +186,7 @@ jobs:
 
   deploy-iac-prod:
     name: Deploy iac (prod)
-    needs: approve
+    needs: checks
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: prod
