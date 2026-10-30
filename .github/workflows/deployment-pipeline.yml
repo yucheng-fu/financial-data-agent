@@ -196,7 +196,7 @@ jobs:
   deploy-iac-prod:
     name: Deploy iac (prod)
     needs: approve
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: prod
     defaults:
@@ -238,7 +238,7 @@ jobs:
   migrate-db-prod:
     name: Migrate database (prod)
     needs: deploy-iac-prod
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: prod
     env:
@@ -286,7 +286,7 @@ jobs:
   deploy-app-prod:
     name: Deploy app (prod)
     needs: [deploy-iac-prod, migrate-db-prod]
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: prod
     env:
