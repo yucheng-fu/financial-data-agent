@@ -10,7 +10,7 @@ from financial_data_agent.db.database import get_session
 
 @pytest.fixture(autouse=True)
 def local_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Force the local environment so tests never reach for Azure Blob Storage.
+    """Force the local environment so tests never reach for Supabase Storage.
 
     Tests covering deployed behavior set `ENVIRONMENT` themselves.
     """
