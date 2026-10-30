@@ -20,6 +20,12 @@ resource "supabase_project" "this" {
   timeouts {
     create = "30m"
   }
+
+  # Destroying the project drops the database and the bucket holding the Terraform state.
+  # Fail the plan instead, e.g. if the module is removed from a root by mistake.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "supabase_pooler" "this" {

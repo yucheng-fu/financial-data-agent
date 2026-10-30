@@ -62,7 +62,7 @@ cp .env.example .env
 | `EMBEDDING_MODEL`, `EMBEDDING_CACHE_DIR` | the in-process embedding model (must produce 384 dimensions) and where it is cached |
 | `LLM_MODEL`, `GOOGLE_API_KEY` | the Gemini chat model; not in `.env.example`, so add both yourself |
 
-`.env` is gitignored and is for local development only. In `test` and `prod` the values are Vercel environment variables. See [docs/deployment.md](docs/deployment.md).
+`.env` is gitignored and is for local development only. In `test` and `prod`, Terraform sets the values as Vercel environment variables. See [docs/deployment.md](docs/deployment.md).
 
 ### Database
 
@@ -118,10 +118,11 @@ Write migrations for `Vector` columns by hand, because autogenerate gets them wr
 ├── .github/workflows/ - CI and the Vercel deployment pipeline
 ├── data/ - Generated datasets organized by ticker, year, and quarter
 ├── docs/ - Design documents
-├── iac/ - Retired Azure infrastructure as code, kept for reference
-│   ├── bootstrap/ - Bicep for the resource group and Terraform state backend
-│   ├── environments/ - Terraform root modules, one per environment
-│   └── modules/ - Reusable Terraform modules
+├── iac/ - Infrastructure as code
+│   ├── bootstrap/ - Retired: Bicep for the Azure resource group and Terraform state backend
+│   ├── environments/ - Retired: Azure Terraform root modules, kept for reference
+│   ├── modules/ - Reusable Terraform modules (Supabase, Vercel and the retired Azure ones)
+│   └── vercel-supabase/ - Terraform root modules for Supabase and Vercel, one per environment
 ├── papers/ - Reference papers (TableRAG, TAG)
 ├── src/financial_data_agent/
 │   ├── agent/ - LangGraph chat graph and schema prompt
@@ -138,7 +139,7 @@ The code is layered with one-way dependencies: API route or tool → agent → s
 
 ## Deployment
 
-The API is deployed to Vercel, with Postgres and the filings bucket on Supabase. CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline migrates the database and deploys to `test` and `prod`, creating each Vercel project on its first deploy, and each GitHub environment requires an approval. Only the Supabase buckets and the credentials are created by hand; see [docs/deployment.md](docs/deployment.md) for the setup checklist and configuration.
+The API is deployed to Vercel, with Postgres and the filings bucket on Supabase. CI runs lint, type checks and tests on every pull request. On merge to `main`, the pipeline applies Terraform, migrates the database and deploys to `test` and `prod`, and each GitHub environment requires an approval. Terraform owns the Supabase and Vercel projects; the Storage buckets and credentials are created by hand. See [iac/vercel-supabase/README.md](iac/vercel-supabase/README.md) to set up an environment and [docs/deployment.md](docs/deployment.md) for the design.
 
 ### Run the container locally
 
@@ -153,6 +154,6 @@ The API is then on <http://127.0.0.1:8000/docs>. On Windows and macOS, use `host
 
 - [Architecture](docs/architecture.md): target design, the chat agent, tools, MCP and deployment
 - [TableRAG](docs/RAG.md): components, control flow and contracts of the TableRAG subgraph
-- [Deployment](docs/deployment.md): Vercel and Supabase setup, environment variables, bundle size and the pipeline
+- [Deployment](docs/deployment.md): Vercel and Supabase infrastructure, configuration, Terraform state, bundle size and the pipeline
 - [Infrastructure](docs/infrastructure.md): the retired Azure stack, kept for reference
 - [Database](docs/database.md): local and deployed Postgres, migrations and the Supabase connection string

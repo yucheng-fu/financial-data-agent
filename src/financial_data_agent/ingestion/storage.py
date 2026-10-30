@@ -17,47 +17,6 @@ def default_data_dir() -> Path:
     return Path(__file__).resolve().parents[3] / "data"
 
 
-class BlobDownloader(Protocol):
-    """Read the content of a downloaded blob."""
-
-    def readall(self) -> str:
-        """Return the whole blob content.
-
-        Returns:
-            The decoded blob content.
-        """
-        ...
-
-
-class BlobContainerClient(Protocol):
-    """Upload and download blobs in a single blob container."""
-
-    def upload_blob(self, name: str, data: bytes, overwrite: bool) -> object:
-        """Upload a blob.
-
-        Args:
-            name: Name of the blob.
-            data: Blob content.
-            overwrite: Whether an existing blob is replaced.
-
-        Returns:
-            The client-specific upload result.
-        """
-        ...
-
-    def download_blob(self, blob: str, *, encoding: str) -> BlobDownloader:
-        """Download a blob.
-
-        Args:
-            blob: Name of the blob.
-            encoding: Text encoding used to decode the blob.
-
-        Returns:
-            A downloader for the blob content.
-        """
-        ...
-
-
 class DataStorage(Protocol):
     """Persist ingested data files."""
 
@@ -170,62 +129,6 @@ class LocalDataStorage:
         return file_path
 
 
-class AzureBlobDataStorage:
-    """Store ingested data in an Azure Blob Storage container."""
-
-    def __init__(self, container_client: BlobContainerClient) -> None:
-        """Initialize the storage.
-
-        Args:
-            container_client: Azure blob container client for the ingestion container.
-        """
-        self.container_client = container_client
-
-    def save_text(self, blob_name: str, content: str) -> str:
-        """Upload text content as a UTF-8 encoded blob.
-
-        Args:
-            blob_name: Name of the blob.
-            content: Text content.
-
-        Returns:
-            The name of the uploaded blob.
-        """
-        return self.save_bytes(blob_name, content.encode("utf-8"))
-
-    def save_bytes(self, blob_name: str, content: bytes) -> str:
-        """Upload binary content as a blob.
-
-        Args:
-            blob_name: Name of the blob.
-            content: Binary content.
-
-        Returns:
-            The name of the uploaded blob.
-        """
-        self.container_client.upload_blob(name=blob_name, data=content, overwrite=True)
-        return blob_name
-
-    def read_text(self, blob_name: str) -> str:
-        """Download a blob as UTF-8 text.
-
-        Args:
-            blob_name: Name of the blob.
-
-        Returns:
-            The content of the blob.
-
-        Raises:
-            FileNotFoundError: If the blob does not exist.
-        """
-        from azure.core.exceptions import ResourceNotFoundError
-
-        try:
-            return self.container_client.download_blob(blob_name, encoding="UTF-8").readall()
-        except ResourceNotFoundError as error:
-            raise FileNotFoundError(f"{blob_name} was not found in the container") from error
-
-
 class SupabaseDataStorage:
     """Store ingested data in a Supabase Storage bucket through its REST API."""
 
@@ -330,8 +233,6 @@ def is_missing_object(response: requests.Response) -> bool:
 def build_data_storage(data_dir: Path | None = None) -> DataStorage:
     """Build the ingestion storage backend for the current environment.
 
-    `AzureBlobDataStorage` is kept from the retired Azure deployment but is no longer selected.
-
     Args:
         data_dir: Root directory used by the local storage backend.
 
@@ -346,6 +247,6 @@ def build_data_storage(data_dir: Path | None = None) -> DataStorage:
 
     return SupabaseDataStorage(
         base_url=require_env("SUPABASE_URL"),
-        secret_key=require_env("SUPABASE_SECRET_KEY"),
+        secret_key=require_env("SUPABASE_SECRET"),
         bucket=require_env("FILINGS_BUCKET"),
     )
