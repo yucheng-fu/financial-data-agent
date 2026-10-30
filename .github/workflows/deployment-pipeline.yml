@@ -15,8 +15,8 @@ jobs:
     name: Lint and test
     runs-on: ubuntu-latest
     concurrency:
-      group: checks-${{ github.ref }}
-      cancel-in-progress: true
+      group: checks-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -78,9 +78,6 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
-    concurrency:
-      group: deploy-iac-test
-      cancel-in-progress: false
     defaults:
       run:
         working-directory: iac/vercel-supabase/test
@@ -123,9 +120,6 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
-    concurrency:
-      group: migrate-db-test
-      cancel-in-progress: false
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
@@ -174,9 +168,6 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: test
-    concurrency:
-      group: deploy-app-test
-      cancel-in-progress: false
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
@@ -208,9 +199,6 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: prod
-    concurrency:
-      group: deploy-iac-prod
-      cancel-in-progress: false
     defaults:
       run:
         working-directory: iac/vercel-supabase/prod
@@ -253,9 +241,6 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: prod
-    concurrency:
-      group: migrate-db-prod
-      cancel-in-progress: false
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
@@ -304,9 +289,6 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: prod
-    concurrency:
-      group: deploy-app-prod
-      cancel-in-progress: false
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
