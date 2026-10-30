@@ -20,8 +20,6 @@ dependencies = [
     "pgvector>=0.5.0",
     "alembic>=1.19.1",
     "psycopg[binary]>=3.3.4",
-    "azure-storage-blob>=12.24.0",
-    "azure-identity>=1.19.0",
     "fastembed==0.8.1",
     "langchain-text-splitters>=1.1.2",
     "langgraph==1.2.12",
