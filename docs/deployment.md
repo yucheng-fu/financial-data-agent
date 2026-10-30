@@ -60,7 +60,7 @@ GitHub environment secrets and variables, per environment:
 | `SUPABASE_ACCESS_TOKEN` | secret | Supabase provider. Classic account token, see [infrastructure.md](infrastructure.md#2-prerequisites-and-secrets) |
 | `SUPABASE_DB_PASSWORD` | secret | `database_password`, composed into `DATABASE_URL` |
 | `LLM_READER_DB_PASSWORD` | secret | composed into `LLM_READER_DATABASE_URL` |
-| `SUPABASE_SECRET_KEY` | secret | Vercel env var `SUPABASE_SECRET_KEY` |
+| `SUPABASE_SECRET` | secret | Vercel env var `SUPABASE_SECRET` |
 | `GOOGLE_API_KEY` | secret | Vercel env var `GOOGLE_API_KEY` |
 | `VERCEL_TOKEN` | secret | Vercel provider (`VERCEL_API_TOKEN`) and CLI |
 | `TF_STATE_ACCESS_KEY_ID`, `TF_STATE_SECRET_ACCESS_KEY` | secret | State backend (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) |
@@ -74,7 +74,7 @@ Terraform sets the Vercel project's production environment variables:
 | --- | --- |
 | `DATABASE_URL`, `LLM_READER_DATABASE_URL` | Composed by `modules/supabase-postgres`, sensitive |
 | `SUPABASE_URL` | `https://<project_ref>.supabase.co`, from the project |
-| `SUPABASE_SECRET_KEY`, `GOOGLE_API_KEY` | GitHub secrets above, sensitive |
+| `SUPABASE_SECRET`, `GOOGLE_API_KEY` | GitHub secrets above, sensitive |
 | `ENVIRONMENT`, `EMBEDDING_MODEL`, `LLM_MODEL`, `FILINGS_BUCKET` | `terraform.tfvars` |
 | `EMBEDDING_CACHE_DIR`, `EDGAR_LOCAL_DATA_DIR` | `/tmp/fastembed`, `/tmp/edgar` |
 | `VERCEL_SUPPORT_LARGE_FUNCTIONS` | `1`, see section 6 |
@@ -166,7 +166,7 @@ The bucket uses the same object names as the old `filings` blob container, so `d
 ```bash
 az storage blob download-batch --account-name stfda<env> --source filings --destination filings-export --auth-mode login
 
-ENVIRONMENT=<env> SUPABASE_URL=... SUPABASE_SECRET_KEY=... FILINGS_BUCKET=bucket-fda-<env> uv run python -c "
+ENVIRONMENT=<env> SUPABASE_URL=... SUPABASE_SECRET=... FILINGS_BUCKET=bucket-fda-<env> uv run python -c "
 from pathlib import Path
 from financial_data_agent.ingestion.storage import build_data_storage
 storage = build_data_storage()

@@ -46,9 +46,9 @@ variable "llm_reader_db_password" {
   sensitive   = true
 }
 
-variable "supabase_secret_key" {
+variable "supabase_secret" {
   type        = string
-  description = "Secret API key (sb_secret_...) the app uses for Storage, supplied as TF_VAR_supabase_secret_key"
+  description = "Secret API key (sb_secret_...) the app uses for Storage, supplied as TF_VAR_supabase_secret"
   sensitive   = true
 }
 

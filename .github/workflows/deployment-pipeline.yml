@@ -92,7 +92,7 @@ jobs:
       VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
       TF_VAR_llm_reader_db_password: ${{ secrets.LLM_READER_DB_PASSWORD }}
-      TF_VAR_supabase_secret_key: ${{ secrets.SUPABASE_SECRET_KEY }}
+      TF_VAR_supabase_secret: ${{ secrets.SUPABASE_SECRET }}
       TF_VAR_google_api_key: ${{ secrets.GOOGLE_API_KEY }}
     outputs:
       vercel_project: ${{ steps.tf.outputs.vercel_project }}
@@ -222,7 +222,7 @@ jobs:
       VERCEL_API_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       TF_VAR_supabase_db_password: ${{ secrets.SUPABASE_DB_PASSWORD }}
       TF_VAR_llm_reader_db_password: ${{ secrets.LLM_READER_DB_PASSWORD }}
-      TF_VAR_supabase_secret_key: ${{ secrets.SUPABASE_SECRET_KEY }}
+      TF_VAR_supabase_secret: ${{ secrets.SUPABASE_SECRET }}
       TF_VAR_google_api_key: ${{ secrets.GOOGLE_API_KEY }}
     outputs:
       vercel_project: ${{ steps.tf.outputs.vercel_project }}

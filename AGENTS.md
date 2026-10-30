@@ -95,7 +95,7 @@ Uses `uv` (Python >=3.11).
 - Migrations (run from `src/financial_data_agent/`, where the working `alembic.ini` and `migrations/` live): `alembic revision --autogenerate -m "name"` then `alembic upgrade head`
 - API: `uv run fastapi dev src/financial_data_agent/api/main.py`
 
-`.env` must define `DATABASE_URL` (used by both `db/database.py` and `migrations/env.py`). `ENVIRONMENT` selects the filings storage backend and defaults to `local`; Terraform sets it on the Vercel project to `test`/`prod` alongside `SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `FILINGS_BUCKET`, which `storage.py` requires in those environments. See `docs/deployment.md`.
+`.env` must define `DATABASE_URL` (used by both `db/database.py` and `migrations/env.py`). `ENVIRONMENT` selects the filings storage backend and defaults to `local`; Terraform sets it on the Vercel project to `test`/`prod` alongside `SUPABASE_URL`, `SUPABASE_SECRET` and `FILINGS_BUCKET`, which `storage.py` requires in those environments. See `docs/deployment.md`.
 
 ### Agent guardrails
 - Keep test updates close to behavior changes and use explicit test names describing what is validated.

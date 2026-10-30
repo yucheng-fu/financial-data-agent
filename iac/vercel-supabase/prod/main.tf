@@ -38,7 +38,7 @@ module "vercel_app" {
   secret_env_vars = {
     DATABASE_URL            = module.supabase_postgres.database_url
     LLM_READER_DATABASE_URL = module.supabase_postgres.llm_reader_database_url
-    SUPABASE_SECRET_KEY     = var.supabase_secret_key
+    SUPABASE_SECRET     = var.supabase_secret
     GOOGLE_API_KEY          = var.google_api_key
   }
 }

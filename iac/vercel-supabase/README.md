@@ -29,7 +29,7 @@ export AWS_ENDPOINT_URL_S3="https://<project_ref>.storage.supabase.co/storage/v1
 export AWS_ACCESS_KEY_ID="<S3 access key ID>" AWS_SECRET_ACCESS_KEY="<S3 secret access key>"
 export SUPABASE_ACCESS_TOKEN="..." VERCEL_API_TOKEN="..."
 export TF_VAR_supabase_db_password="..." TF_VAR_llm_reader_db_password="..."
-export TF_VAR_supabase_secret_key="..." TF_VAR_google_api_key="..."
+export TF_VAR_supabase_secret="..." TF_VAR_google_api_key="..."
 terraform -chdir=iac/vercel-supabase/$ENV init -input=false
 terraform -chdir=iac/vercel-supabase/$ENV plan
 ```

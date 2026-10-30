@@ -238,7 +238,7 @@ def test_supabase_data_storage_read_text_raises_http_error_for_other_failures(mo
 def test_build_data_storage_returns_supabase_when_environment_is_test(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("SUPABASE_URL", f"{SUPABASE_URL}/")
-    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_key")
+    monkeypatch.setenv("SUPABASE_SECRET", "sb_secret_key")
     monkeypatch.setenv("FILINGS_BUCKET", "filings")
 
     storage = build_data_storage(tmp_path)

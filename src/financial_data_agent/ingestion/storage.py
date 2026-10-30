@@ -346,6 +346,6 @@ def build_data_storage(data_dir: Path | None = None) -> DataStorage:
 
     return SupabaseDataStorage(
         base_url=require_env("SUPABASE_URL"),
-        secret_key=require_env("SUPABASE_SECRET_KEY"),
+        secret_key=require_env("SUPABASE_SECRET"),
         bucket=require_env("FILINGS_BUCKET"),
     )
