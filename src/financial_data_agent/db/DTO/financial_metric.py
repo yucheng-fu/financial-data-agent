@@ -24,8 +24,6 @@ class FinancialMetricDTO:
     shares_outstanding_diluted: Decimal | None = None
     current_ratio: Decimal | None = None
     debt_to_assets_ratio: Decimal | None = None
-    period: str | None = None
-    year: int | None = None
     supplied_fields: frozenset[str] = frozenset()
 
     def to_model_kwargs(self) -> dict[str, object | None]:
@@ -37,8 +35,6 @@ class FinancialMetricDTO:
         return {
             "document_id": self.document_id,
             **{field: getattr(self, field) for field in METRIC_FIELDS},
-            "period": self.period,
-            "year": self.year,
         }
 
     def apply_to(self, financial_metric: FinancialMetric) -> FinancialMetric:
@@ -50,7 +46,7 @@ class FinancialMetricDTO:
         Returns:
             The financial metric with the supplied fields applied.
         """
-        for field in ("document_id", *METRIC_FIELDS, "period", "year"):
+        for field in ("document_id", *METRIC_FIELDS):
             if field in self.supplied_fields:
                 setattr(financial_metric, field, getattr(self, field))
         return financial_metric

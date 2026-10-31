@@ -50,6 +50,7 @@ class RetrievedChunk:
     heading_path: str | None
     chunk_index: int
     ticker: str
-    year: int
-    quarter: int
+    reporting_year: int
+    reporting_quarter: int
+    period_type: str
     accession_number: str

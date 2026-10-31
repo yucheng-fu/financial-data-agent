@@ -1,7 +1,6 @@
 from io import BytesIO, StringIO
 
 import pandas as pd
-import polars as pl
 import requests
 
 from financial_data_agent.constants import SP500_PARQUET_NAME, SP500_WIKI_URL
@@ -27,22 +26,21 @@ class SP500Fetcher:
         }
         self.storage = storage or build_data_storage()
 
-    def fetch(self, save_parquet: bool = True) -> pl.DataFrame:
+    def fetch(self, save_parquet: bool = True) -> pd.DataFrame:
         """Fetch the S&P 500 constituents table from Wikipedia.
 
         Args:
             save_parquet: Whether to persist the fetched table to the configured storage backend.
 
         Returns:
-            The Wikipedia constituents table as a Polars DataFrame.
+            The Wikipedia constituents table as a pandas DataFrame.
         """
         response = requests.get(self.url, headers=self.headers, timeout=30)
         response.raise_for_status()
-        tables = pd.read_html(StringIO(response.text), converters={"CIK": str})
-        df = pl.from_pandas(tables[0])
+        df = pd.read_html(StringIO(response.text), converters={"CIK": str})[0]
 
         if save_parquet:
             buffer = BytesIO()
-            df.write_parquet(buffer, compression="snappy")
+            df.to_parquet(buffer, compression="snappy")
             self.storage.save_bytes(SP500_PARQUET_NAME, buffer.getvalue())
         return df

@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Numeric, String
+from sqlalchemy import ForeignKey, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from financial_data_agent.db.models.base import Base, TimestampMixin
@@ -78,14 +78,6 @@ class FinancialMetric(TimestampMixin, Base):
 
     debt_to_assets_ratio: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=2),
-    )
-
-    period: Mapped[str] = mapped_column(
-        String(30),
-    )
-
-    year: Mapped[int] = mapped_column(
-        nullable=False,
     )
 
     document: Mapped[Document] = relationship(

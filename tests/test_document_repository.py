@@ -112,3 +112,30 @@ def test_document_repository_create_rejects_missing_required_fields() -> None:
 
     with pytest.raises(IntegrityError):
         repository.create(DocumentDTO(company_id=company_id, accession_number="0000320193-26-000001"))
+
+
+def test_list_by_period_returns_the_newest_row_of_a_filing_stored_twice() -> None:
+    session = make_session()
+    company_id = make_company_id(session)
+    repository = DocumentRepository(session)
+
+    def create(accession_number: str, path: str) -> int:
+        return repository.create(
+            DocumentDTO(
+                company_id=company_id,
+                accession_number=accession_number,
+                document_type="10-Q",
+                reporting_year=2026,
+                reporting_quarter=2,
+                period_type="quarterly",
+                filing_date=date(2026, 5, 1),
+                period_of_report=date(2026, 3, 31),
+                raw_document_path=path,
+            )
+        ).id
+
+    create("0000320193-26-000001", "old.md")
+    newest_id = create("0000320193-26-000001", "new.md")
+
+    assert [document.id for document in repository.list_by_period(company_id, 2026, 2)] == [newest_id]
+    assert repository.list_by_period(company_id, 2026, 3) == []

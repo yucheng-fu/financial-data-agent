@@ -46,21 +46,43 @@ class DocumentRepository:
         """
         return self.session.get(Document, document_id)
 
-    def get_latest_for_period(self, company_id: int, year: int, quarter: int) -> Document | None:
-        """Return the most recently created document of a company for a period.
+    def list_by_period(self, company_id: int, reporting_year: int, reporting_quarter: int) -> list[Document]:
+        """Return the documents of a company reported in a calendar quarter.
+
+        A filing stored more than once is returned once, as its most recently created row.
 
         Args:
             company_id: Primary key of the company.
-            year: Filing year.
-            quarter: Calendar quarter, from 1 to 4.
+            reporting_year: Calendar year the filings were reported in.
+            reporting_quarter: Calendar quarter the filings were reported in, from 1 to 4.
 
         Returns:
-            The newest matching document, or None if there is none.
+            The matching documents ordered by id; empty if there are none.
         """
         statement = (
             select(Document)
-            .where(Document.company_id == company_id, Document.year == year, Document.quarter == quarter)
-            .order_by(Document.id.desc())
+            .where(
+                Document.company_id == company_id,
+                Document.reporting_year == reporting_year,
+                Document.reporting_quarter == reporting_quarter,
+            )
+            .order_by(Document.id)
+        )
+        latest_by_accession = {document.accession_number: document for document in self.session.scalars(statement)}
+        return list(latest_by_accession.values())
+
+    def get_by_accession_number(self, company_id: int, accession_number: str) -> Document | None:
+        """Return the document of a company for an SEC accession number.
+
+        Args:
+            company_id: Primary key of the company.
+            accession_number: SEC accession number of the filing.
+
+        Returns:
+            The matching document, or None if there is none.
+        """
+        statement = select(Document).where(
+            Document.company_id == company_id, Document.accession_number == accession_number
         )
         return self.session.scalars(statement).first()
 

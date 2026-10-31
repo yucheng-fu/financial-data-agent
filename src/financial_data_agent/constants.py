@@ -7,6 +7,9 @@ SP500_PARQUET_NAME = "s&p500.parquet"
 SEC_IDENTITY = "MyName my.email@domain.com"
 STORAGE_TIMEOUT_SECONDS = 60
 
+PERIOD_TYPES = ("quarterly", "annual")
+ANNUAL_FORMS = ("10-K",)
+
 EMBEDDING_DIMENSIONS = 384
 EMBEDDING_INDEX_NAME = "ix_document_chunks_embedding_hnsw"
 

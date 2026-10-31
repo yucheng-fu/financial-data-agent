@@ -25,8 +25,8 @@ def build_search_statement(
     Args:
         embedding: Query embedding.
         tickers: Tickers to restrict to, or empty for all.
-        years: Fiscal years to restrict to, or empty for all.
-        quarters: Fiscal quarters to restrict to, or empty for all.
+        years: Reporting years to restrict to, or empty for all.
+        quarters: Reporting quarters to restrict to, or empty for all. A quarter restricts to quarterly filings.
         limit: Maximum number of chunks to return.
 
     Returns:
@@ -39,8 +39,9 @@ def build_search_statement(
             DocumentChunk.heading_path,
             DocumentChunk.chunk_index,
             Company.ticker,
-            Document.year,
-            Document.quarter,
+            Document.reporting_year,
+            Document.reporting_quarter,
+            Document.period_type,
             Document.accession_number,
         )
         .join(Document, DocumentChunk.document_id == Document.id)
@@ -49,9 +50,9 @@ def build_search_statement(
     if tickers:
         statement = statement.where(Company.ticker.in_(tickers))
     if years:
-        statement = statement.where(Document.year.in_(years))
+        statement = statement.where(Document.reporting_year.in_(years))
     if quarters:
-        statement = statement.where(Document.quarter.in_(quarters))
+        statement = statement.where(Document.reporting_quarter.in_(quarters), Document.period_type == "quarterly")
     return statement.order_by(DocumentChunk.embedding.op("<=>")(list(embedding))).limit(limit)
 
 
@@ -159,8 +160,8 @@ class DocumentChunkRepository:
         Args:
             embedding: Query embedding.
             tickers: Tickers to restrict to, or empty for all.
-            years: Fiscal years to restrict to, or empty for all.
-            quarters: Fiscal quarters to restrict to, or empty for all.
+            years: Reporting years to restrict to, or empty for all.
+            quarters: Reporting quarters to restrict to, or empty for all. A quarter restricts to quarterly filings.
             limit: Maximum number of chunks to return.
 
         Returns:
