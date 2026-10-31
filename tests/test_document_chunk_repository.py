@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from financial_data_agent.constants import CHUNK_FIELDS, EMBEDDING_DIMENSIONS
 from financial_data_agent.db.DTO.company import CompanyDTO
-from financial_data_agent.db.DTO.document import DocumentDTO
+from financial_data_agent.db.DTO.document import DocumentDTO, FilingCoverage
 from financial_data_agent.db.DTO.document_chunk import DocumentChunkDTO
 from financial_data_agent.db.models.base import Base
 from financial_data_agent.db.repositories.company import CompanyRepository
@@ -168,3 +168,30 @@ def test_build_search_statement_restricts_a_quarter_filter_to_quarterly_filings(
     assert "documents.reporting_quarter IN" in sql
     assert "documents.period_type = " in sql
     assert "quarterly" in statement.compile().params.values()
+
+
+def test_document_repository_list_coverage_counts_chunks_and_filters_by_ticker() -> None:
+    session = make_session()
+    document_id = make_document_id(session)
+    msft = CompanyRepository(session).create(CompanyDTO(ticker="MSFT", name="Microsoft", cik="0000789019"))
+    DocumentRepository(session).create(
+        DocumentDTO(
+            company_id=msft.id,
+            accession_number="0000789019-26-000001",
+            document_type="10-K",
+            reporting_year=2026,
+            reporting_quarter=3,
+            period_type="annual",
+            filing_date=date(2026, 8, 1),
+            period_of_report=date(2026, 6, 30),
+            raw_document_path="MSFT_2026_Q3.md",
+        )
+    )
+    DocumentChunkRepository(session).create_many([make_chunk_dto(document_id, 0), make_chunk_dto(document_id, 1)])
+    repository = DocumentRepository(session)
+
+    assert repository.list_coverage() == [
+        FilingCoverage("AAPL", 2026, 2, "quarterly", 2),
+        FilingCoverage("MSFT", 2026, 3, "annual", 0),
+    ]
+    assert repository.list_coverage("msft") == [FilingCoverage("MSFT", 2026, 3, "annual", 0)]
