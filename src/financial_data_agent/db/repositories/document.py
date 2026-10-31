@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from financial_data_agent.db.DTO.document import DocumentDTO
+from financial_data_agent.db.DTO.document import DocumentDTO, FilingCoverage
+from financial_data_agent.db.models.company import Company
 from financial_data_agent.db.models.document import Document
+from financial_data_agent.db.models.document_chunk import DocumentChunk
 
 
 class DocumentRepository:
@@ -70,6 +72,32 @@ class DocumentRepository:
         )
         latest_by_accession = {document.accession_number: document for document in self.session.scalars(statement)}
         return list(latest_by_accession.values())
+
+    def list_coverage(self, ticker: str | None = None) -> list[FilingCoverage]:
+        """Return the stored filings with their chunk counts.
+
+        Args:
+            ticker: Ticker symbol to restrict the result to, or None for every company.
+
+        Returns:
+            One row per company, reporting period and period type, ordered by ticker then period.
+        """
+        statement = (
+            select(
+                Company.ticker,
+                Document.reporting_year,
+                Document.reporting_quarter,
+                Document.period_type,
+                func.count(DocumentChunk.id),
+            )
+            .join(Document, Document.company_id == Company.id)
+            .outerjoin(DocumentChunk, DocumentChunk.document_id == Document.id)
+            .group_by(Company.ticker, Document.reporting_year, Document.reporting_quarter, Document.period_type)
+            .order_by(Company.ticker, Document.reporting_year, Document.reporting_quarter, Document.period_type)
+        )
+        if ticker is not None:
+            statement = statement.where(Company.ticker == ticker.upper())
+        return [FilingCoverage(*row) for row in self.session.execute(statement)]
 
     def get_by_accession_number(self, company_id: int, accession_number: str) -> Document | None:
         """Return the document of a company for an SEC accession number.
