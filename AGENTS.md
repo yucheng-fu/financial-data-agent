@@ -97,6 +97,13 @@ Uses `uv` (Python >=3.11).
 
 `.env` must define `DATABASE_URL` (used by both `db/database.py` and `migrations/env.py`). `ENVIRONMENT` selects the filings storage backend and defaults to `local`; Terraform sets it on the Vercel project to `test`/`prod` alongside `SUPABASE_URL`, `SUPABASE_SECRET` and `FILINGS_BUCKET`, which `storage.py` requires in those environments. See `docs/deployment.md`.
 
+### Knowledge graph
+This project has a knowledge graph at `graphify-out/` with god nodes, community structure, and cross-file relationships.
+- For codebase questions, first run `graphify query "<question>"` when `graphify-out/graph.json` exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than `GRAPH_REPORT.md` or raw grep output.
+- If `graphify-out/wiki/index.md` exists, use it for broad navigation instead of raw source browsing.
+- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
 ### Agent guardrails
 - Keep test updates close to behavior changes and use explicit test names describing what is validated.
 - Avoid broad refactors unless requested; prioritize minimal, verifiable changes.
