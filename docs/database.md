@@ -94,3 +94,19 @@ Two consequences worth knowing:
 - Building HNSW needs the vectors to fit in `maintenance_work_mem`. A full S&P 500 backfill is on the order of 400MB of vectors and will exceed a small Supabase instance's default. The index is created on an empty table here, so the migration itself is instant; a bulk backfill should either raise `maintenance_work_mem` for the session or drop the index, load, and recreate it.
 
 Queries must use the `<=>` operator, which is what `DocumentChunk.embedding.cosine_distance(...)` compiles to. The `cosine_distance()` SQL function is not the same thing and does not use the index, so a query written that way silently degrades into a sequential scan over every chunk.
+
+## 8. Document periods
+
+A filing is placed by when it was reported and typed by what it covers, both on `documents`:
+
+| Columns | Meaning | Source |
+|---|---|---|
+| `reporting_year`, `reporting_quarter` | Calendar year and quarter of `filing_date`. | The `year` and `quarter` edgartools searches by; the same for every company. |
+| `period_type` | `quarterly` for a 10-Q, `annual` for a 10-K. | The form type. |
+| `period_of_report` | End date of the period the filing covers. | The filing. |
+
+Fiscal years are deliberately not stored. They differ between companies (NVDA ends in January, MSFT in June) and the filer-reported labels are inconsistent, so everything keys on the reporting period, which is comparable across companies.
+
+A 10-K is filed in the first quarter for many companies, so a 10-K and a 10-Q can share a `reporting_quarter`. Their income and cash flow figures differ in scope: the annual figures cover a whole fiscal year. `period_type` is what keeps them apart, and queries must filter on it and never add or average annual and quarterly rows. "Q1 2020" therefore means filings made in January to March 2020, not the quarter ending in March; use `period_of_report` for the latter.
+
+`financial_metrics` has no period of its own; it reaches these columns through `document_id`, so a metric row cannot disagree with its filing. `POST /filings/import` stores every 10-K and 10-Q reported in the quarter and updates a filing it already stored, matched by accession number. The migration backfills `period_type` from `document_type`, so existing rows need no re-import.

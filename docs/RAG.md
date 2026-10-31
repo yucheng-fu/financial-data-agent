@@ -131,7 +131,7 @@ sequenceDiagram
 - **State updates.** Nodes return deltas. `history` and `errors` append; `citations` and `missing` append only unseen items.
 - **Step bound.** Every invoke passes `recursion_limit_for(max_iterations)` = `5 * max_iterations + 2`. If the model still asks for a subquery past `max_iterations`, the graph ends with `answer = None`.
 - **SQL errors** are recorded, not raised, so the intermediate answer falls back to the passages.
-- **Missing filings.** A fully named `(ticker, year, quarter)` absent from the candidates, when SQL returned no rows, is reported in `missing`. The subgraph never acquires; the chat agent decides whether to call `acquire_filing`.
+- **Missing filings.** A fully named `(ticker, year, quarter)` of quarterly filings absent from the candidates, when SQL returned no rows, is reported in `missing`. The subgraph never acquires; the chat agent decides whether to call `acquire_filing`.
 
 ## 5. SQL in TableRAG vs `query_database`
 Both paths run SQL through `execute_llm_sql` as `llm_reader` with `CHAT_SQL_ROW_LIMIT`. They differ in who writes the SQL and who consumes the rows.
