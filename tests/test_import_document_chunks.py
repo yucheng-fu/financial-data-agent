@@ -17,7 +17,7 @@ from financial_data_agent.services.document_chunk_import import (
 from financial_data_agent.services.filing_import import CompanyNotFoundError
 from financial_data_agent.services.financial_metrics_import import DocumentNotFoundError
 
-BLOB_NAME = "ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2.md"
+BLOB_NAME = "ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2_quarterly.md"
 
 FILING_MARKDOWN = """# Apple Inc.
 
@@ -42,8 +42,7 @@ class FakeCompany:
 
 class FakeDocument:
     id = 7
-    year = 2026
-    quarter = 2
+    raw_document_path = BLOB_NAME
 
 
 class FakeCompanyRepository:
@@ -61,8 +60,10 @@ class FakeDocumentRepository:
         self.session = session
         self.document = document
 
-    def get_latest_for_period(self, company_id: int, year: int, quarter: int) -> FakeDocument | None:
-        assert (company_id, year, quarter) == (42, 2026, 2)
+    def get_by_period(
+        self, company_id: int, reporting_year: int, reporting_quarter: int, period_type: str
+    ) -> FakeDocument | None:
+        assert (company_id, reporting_year, reporting_quarter, period_type) == (42, 2026, 2, "quarterly")
         return self.document
 
 
@@ -149,7 +150,7 @@ def test_import_chunks_stores_a_chunk_per_section_with_its_metadata(monkeypatch:
     embedder = FakeEmbedder()
     service = build_service(monkeypatch, chunk_repository, storage, embedder)
 
-    result = service.import_chunks(ticker="aapl", year=2026, quarter=2)
+    result = service.import_chunks(ticker="aapl", reporting_year=2026, reporting_quarter=2, period_type="quarterly")
 
     assert result.ticker == "AAPL"
     assert result.status == "created"
@@ -171,7 +172,7 @@ def test_import_chunks_reads_the_derived_blob_name_not_the_stored_path(monkeypat
     storage = FakeStorage()
     service = build_service(monkeypatch, FakeChunkRepository(session=object()), storage, FakeEmbedder())
 
-    service.import_chunks(ticker="AAPL", year=2026, quarter=2)
+    service.import_chunks(ticker="AAPL", reporting_year=2026, reporting_quarter=2, period_type="quarterly")
 
     assert storage.reads == [BLOB_NAME]
 
@@ -182,7 +183,7 @@ def test_import_chunks_skips_an_already_chunked_document(monkeypatch: pytest.Mon
     embedder = FakeEmbedder()
     service = build_service(monkeypatch, chunk_repository, storage, embedder)
 
-    result = service.import_chunks(ticker="AAPL", year=2026, quarter=2)
+    result = service.import_chunks(ticker="AAPL", reporting_year=2026, reporting_quarter=2, period_type="quarterly")
 
     assert result.status == "skipped"
     assert result.chunk_count == 11
@@ -195,7 +196,9 @@ def test_import_chunks_replaces_existing_chunks_when_forced(monkeypatch: pytest.
     chunk_repository = FakeChunkRepository(session=object(), existing=11)
     service = build_service(monkeypatch, chunk_repository, FakeStorage(), FakeEmbedder())
 
-    result = service.import_chunks(ticker="AAPL", year=2026, quarter=2, force=True)
+    result = service.import_chunks(
+        ticker="AAPL", reporting_year=2026, reporting_quarter=2, period_type="quarterly", force=True
+    )
 
     assert result.status == "replaced"
     assert chunk_repository.deleted_for == [7]
@@ -207,7 +210,7 @@ def test_import_chunks_rejects_an_embedder_with_the_wrong_dimension(monkeypatch:
     service = build_service(monkeypatch, chunk_repository, FakeStorage(), FakeEmbedder(dimensions=768))
 
     with pytest.raises(EmbeddingDimensionError, match="768"):
-        service.import_chunks(ticker="AAPL", year=2026, quarter=2)
+        service.import_chunks(ticker="AAPL", reporting_year=2026, reporting_quarter=2, period_type="quarterly")
 
     assert chunk_repository.created == []
 
@@ -216,7 +219,7 @@ def test_import_chunks_raises_when_the_stored_markdown_is_missing(monkeypatch: p
     service = build_service(monkeypatch, FakeChunkRepository(session=object()), FakeStorage(None), FakeEmbedder())
 
     with pytest.raises(FilingContentNotFoundError, match=BLOB_NAME):
-        service.import_chunks(ticker="AAPL", year=2026, quarter=2)
+        service.import_chunks(ticker="AAPL", reporting_year=2026, reporting_quarter=2, period_type="quarterly")
 
 
 def test_import_chunks_raises_for_an_unknown_company(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -225,7 +228,7 @@ def test_import_chunks_raises_for_an_unknown_company(monkeypatch: pytest.MonkeyP
     )
 
     with pytest.raises(CompanyNotFoundError, match="AAPL"):
-        service.import_chunks(ticker="AAPL", year=2026, quarter=2)
+        service.import_chunks(ticker="AAPL", reporting_year=2026, reporting_quarter=2, period_type="quarterly")
 
 
 def test_import_chunks_raises_when_the_filing_is_not_in_the_database(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -234,7 +237,7 @@ def test_import_chunks_raises_when_the_filing_is_not_in_the_database(monkeypatch
     )
 
     with pytest.raises(DocumentNotFoundError, match="2026 Q2"):
-        service.import_chunks(ticker="AAPL", year=2026, quarter=2)
+        service.import_chunks(ticker="AAPL", reporting_year=2026, reporting_quarter=2, period_type="quarterly")
 
 
 def test_import_document_chunks_route_returns_the_import_summary(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -250,13 +253,17 @@ def test_import_document_chunks_route_returns_the_import_summary(monkeypatch: py
     monkeypatch.setattr(document_chunk_import, "get_embedder", lambda: FakeEmbedder())
 
     client = TestClient(app)
-    response = client.post("/api/v1/document-chunks/import", json={"ticker": "AAPL", "year": 2026, "quarter": 2})
+    response = client.post(
+        "/api/v1/document-chunks/import",
+        json={"ticker": "AAPL", "reporting_year": 2026, "reporting_quarter": 2, "period_type": "quarterly"},
+    )
 
     assert response.status_code == 200
     assert response.json() == {
         "ticker": "AAPL",
-        "year": 2026,
-        "quarter": 2,
+        "reporting_year": 2026,
+        "reporting_quarter": 2,
+        "period_type": "quarterly",
         "chunk_count": len(chunk_repository.created),
         "status": "created",
     }
@@ -270,6 +277,9 @@ def test_import_document_chunks_route_returns_404_for_an_unknown_company(monkeyp
     monkeypatch.setattr(document_chunk_import, "get_embedder", lambda: FakeEmbedder())
 
     client = TestClient(app)
-    response = client.post("/api/v1/document-chunks/import", json={"ticker": "AAPL", "year": 2026, "quarter": 2})
+    response = client.post(
+        "/api/v1/document-chunks/import",
+        json={"ticker": "AAPL", "reporting_year": 2026, "reporting_quarter": 2, "period_type": "quarterly"},
+    )
 
     assert response.status_code == 404

@@ -15,8 +15,9 @@ def test_schema_prompt_lists_every_granted_table_and_metric_field() -> None:
         assert f"\t{field} NUMERIC" in prompt
 
 
-def test_schema_prompt_says_to_filter_on_documents_quarter() -> None:
+def test_schema_prompt_separates_reporting_period_from_period_type() -> None:
     prompt = build_schema_prompt()
 
-    assert "Filter quarters on documents.quarter" in prompt
-    assert "Never filter on financial_metrics.period" in prompt
+    assert "WHEN the filing was reported" in prompt
+    assert "documents.period_type says WHAT the filing covers" in prompt
+    assert "never add or average annual and quarterly figures" in prompt

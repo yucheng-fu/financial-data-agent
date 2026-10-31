@@ -64,20 +64,27 @@ cp .env.example .env
 
 `.env` is gitignored and is for local development only. In `test` and `prod`, Terraform sets the values as Vercel environment variables. See [docs/deployment.md](docs/deployment.md).
 
-### Database
+### Start the database
+
+Run every command in this section from the repository root. Start the local PostgreSQL + pgvector container with Docker Compose:
 
 ```bash
-cd src/financial_data_agent/db
-docker compose --env-file ../../../.env up -d
-cd ..
-alembic upgrade head
+docker compose --env-file .env -f src/financial_data_agent/db/docker-compose.yaml up -d
 ```
 
-`--env-file` is required, and `alembic upgrade` sets the `llm_reader` password from `LLM_READER_DATABASE_URL`. See [db/README.md](src/financial_data_agent/db/README.md).
+`--env-file` is required: it supplies `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` to the container. To stop it, run the same command with `down` instead of `up -d`. See [db/README.md](src/financial_data_agent/db/README.md).
+
+### Run the migrations
+
+With the database running, apply all migrations:
+
+```bash
+uv run alembic -c src/financial_data_agent/alembic.ini upgrade head
+```
+
+`DATABASE_URL` and `LLM_READER_DATABASE_URL` are read from `.env`; the migrations set the `llm_reader` password from the second.
 
 ### Run the API
-
-From the repository root:
 
 ```bash
 uv run fastapi dev src/financial_data_agent/api/main.py
@@ -102,11 +109,11 @@ uv run pyrefly check     # type check
 
 Tests need no database or network. The `llm_reader` permission tests skip unless `LLM_READER_DATABASE_URL` is reachable.
 
-To create a migration after changing a model, run this from `src/financial_data_agent/`:
+To create a migration after changing a model, run this from the repository root:
 
 ```bash
-alembic revision --autogenerate -m "describe the change"
-alembic upgrade head
+uv run alembic -c src/financial_data_agent/alembic.ini revision --autogenerate -m "describe the change"
+uv run alembic -c src/financial_data_agent/alembic.ini upgrade head
 ```
 
 Write migrations for `Vector` columns by hand, because autogenerate gets them wrong. See [docs/database.md](docs/database.md#6-pgvector).

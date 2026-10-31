@@ -34,8 +34,9 @@ def test_document_repository_crud_round_trip() -> None:
         company_id=company_id,
         accession_number="0000320193-26-000001",
         document_type="10-Q",
-        year=2026,
-        quarter=2,
+        reporting_year=2026,
+        reporting_quarter=2,
+        period_type="quarterly",
         filing_date=date(2026, 5, 1),
         period_of_report=date(2026, 3, 31),
         raw_document_path="data/ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2.md",
@@ -56,19 +57,19 @@ def test_document_repository_crud_round_trip() -> None:
         document,
         DocumentDTO(
             document_type="10-K",
-            quarter=4,
+            reporting_quarter=4,
             raw_document_path="data/ticker=AAPL/year=2026/quarter=Q4/AAPL_2026_Q4.md",
-            supplied_fields=frozenset({"document_type", "quarter", "raw_document_path"}),
+            supplied_fields=frozenset({"document_type", "reporting_quarter", "raw_document_path"}),
         ),
     )
 
     # Verify that the supplied fields changed and the others were left untouched
     assert updated_document.document_type == "10-K"
-    assert updated_document.quarter == 4
+    assert updated_document.reporting_quarter == 4
     assert updated_document.raw_document_path == "data/ticker=AAPL/year=2026/quarter=Q4/AAPL_2026_Q4.md"
     assert updated_document.company_id == company_id
     assert updated_document.accession_number == "0000320193-26-000001"
-    assert updated_document.year == 2026
+    assert updated_document.reporting_year == 2026
     assert updated_document.filing_date == date(2026, 5, 1)
     assert updated_document.period_of_report == date(2026, 3, 31)
 
@@ -89,18 +90,19 @@ def test_document_repository_update_ignores_unsupplied_fields() -> None:
             company_id=company_id,
             accession_number="0000320193-26-000001",
             document_type="10-Q",
-            year=2026,
-            quarter=2,
+            reporting_year=2026,
+            reporting_quarter=2,
+            period_type="quarterly",
             filing_date=date(2026, 5, 1),
             period_of_report=date(2026, 3, 31),
             raw_document_path="data/AAPL_2026_Q2.md",
         )
     )
 
-    updated_document = repository.update(document, DocumentDTO(document_type="10-K", year=2025))
+    updated_document = repository.update(document, DocumentDTO(document_type="10-K", reporting_year=2025))
 
     assert updated_document.document_type == "10-Q"
-    assert updated_document.year == 2026
+    assert updated_document.reporting_year == 2026
 
 
 def test_document_repository_create_rejects_missing_required_fields() -> None:

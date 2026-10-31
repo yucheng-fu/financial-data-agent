@@ -33,8 +33,9 @@ def make_document_id(session: Session) -> int:
             company_id=company.id,
             accession_number="0000320193-26-000001",
             document_type="10-Q",
-            year=2026,
-            quarter=2,
+            reporting_year=2026,
+            reporting_quarter=2,
+            period_type="quarterly",
             filing_date=date(2026, 5, 1),
             period_of_report=date(2026, 3, 31),
             raw_document_path="data/ticker=AAPL/year=2026/quarter=Q2/AAPL_2026_Q2.md",
@@ -155,5 +156,15 @@ def test_build_search_statement_filters_only_on_supplied_filings() -> None:
     sql = compile_postgres(build_search_statement([0.0] * EMBEDDING_DIMENSIONS, ["AAPL"], [2024], [], limit=5))
 
     assert "companies.ticker IN" in sql
-    assert "documents.year IN" in sql
-    assert "documents.quarter" not in sql.split("WHERE", 1)[1]
+    assert "documents.reporting_year IN" in sql
+    assert "documents.reporting_quarter" not in sql.split("WHERE", 1)[1]
+    assert "documents.period_type" not in sql.split("WHERE", 1)[1]
+
+
+def test_build_search_statement_restricts_a_quarter_filter_to_quarterly_filings() -> None:
+    statement = build_search_statement([0.0] * EMBEDDING_DIMENSIONS, ["AAPL"], [2024], [2], limit=5)
+    sql = compile_postgres(statement)
+
+    assert "documents.reporting_quarter IN" in sql
+    assert "documents.period_type = " in sql
+    assert "quarterly" in statement.compile().params.values()
