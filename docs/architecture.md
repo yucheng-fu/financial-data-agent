@@ -144,7 +144,7 @@ Tools live in `api/tools/`. Like `api/v1` routes, they are thin: they call servi
 | `query_database(sql)` | `services/sql_query.py` as `llm_reader` | Supabase metrics (SQL); how it differs from TableRAG's SQL: [RAG.md §5](RAG.md#5-sql-in-tablerag-vs-query_database) |
 | `table_rag(question, tickers?, years?, quarters?)` | TableRAG subgraph → `services/chunk_retrieval.py`, `services/sql_query.py` | Supabase metrics (SQL) and chunks (pgvector) |
 | `list_available_filings(ticker?)` | `DocumentRepository` | Supabase `documents` and chunk counts |
-| `acquire_filing(ticker, year, quarter)` | `FilingImportService`, `FinancialMetricsImportService`, `DocumentChunkImportService` | SEC → Supabase Storage → Postgres; re-chunks from the stored blob when the filing exists but has no chunks |
+| `acquire_filing(ticker, reporting_year, reporting_quarter)` | `FilingImportService`, `FinancialMetricsImportService`, `DocumentChunkImportService` | SEC → Supabase Storage → Postgres; re-chunks from the stored blob when the filing exists but has no chunks |
 
 The agent never reads raw blobs. Chunks are the retrievable form of a filing, and `DocumentChunkImportService` reads the blob through `DataStorage.read_text`.
 

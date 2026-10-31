@@ -13,12 +13,12 @@ from financial_data_agent.constants import (
     SKIPPED_STATUS,
 )
 from financial_data_agent.db.DTO.document_chunk import DocumentChunkDTO
+from financial_data_agent.db.models.document import Document
 from financial_data_agent.db.repositories.company import CompanyRepository
 from financial_data_agent.db.repositories.document import DocumentRepository
 from financial_data_agent.db.repositories.document_chunk import DocumentChunkRepository
 from financial_data_agent.ingestion.embeddings import Embedder, get_embedder
 from financial_data_agent.ingestion.markdown_chunking import chunk_markdown
-from financial_data_agent.ingestion.paths import filing_blob_name
 from financial_data_agent.ingestion.storage import DataStorage, build_data_storage
 from financial_data_agent.services.filing_import import CompanyNotFoundError
 from financial_data_agent.services.financial_metrics_import import DocumentNotFoundError
@@ -33,14 +33,23 @@ class EmbeddingDimensionError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class ImportedChunks:
+    """The chunk import outcome of one filing."""
+
+    document_type: str
+    period_type: str
+    chunk_count: int
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentChunkImportResult:
     """Outcome of a document chunk import."""
 
     ticker: str
-    year: int
-    quarter: int
-    chunk_count: int
-    status: str
+    reporting_year: int
+    reporting_quarter: int
+    filings: list[ImportedChunks]
 
 
 class DocumentChunkImportService:
@@ -66,42 +75,66 @@ class DocumentChunkImportService:
         self.embedder = embedder
         self.embedding_model = get_embedding_model()
 
-    def import_chunks(self, ticker: str, year: int, quarter: int, force: bool = False) -> DocumentChunkImportResult:
-        """Chunk, embed and persist the stored markdown of a filing.
+    def import_chunks(
+        self, ticker: str, reporting_year: int, reporting_quarter: int, force: bool = False
+    ) -> DocumentChunkImportResult:
+        """Chunk, embed and persist the stored markdown of the filings reported in a calendar quarter.
 
         An already chunked document is skipped unless `force` is set, in which case its
         chunks are replaced.
 
         Args:
             ticker: Ticker symbol of the company.
-            year: Filing year.
-            quarter: Calendar quarter, from 1 to 4.
+            reporting_year: Calendar year the filings were reported in.
+            reporting_quarter: Calendar quarter the filings were reported in, from 1 to 4.
             force: Whether to replace chunks that already exist.
 
         Returns:
-            The normalized ticker, period, the number of stored chunks, and what was done.
+            The normalized ticker, the reporting period, and each filing with its period type, the number of
+            stored chunks, and what was done.
 
         Raises:
             CompanyNotFoundError: If the company does not exist in the database.
             DocumentNotFoundError: If the company has no filing in the database for the period.
-            FilingContentNotFoundError: If the stored markdown of the filing is missing.
+            FilingContentNotFoundError: If the stored markdown of a filing is missing.
             EmbeddingDimensionError: If the embedder returns vectors of the wrong dimension.
         """
         normalized_ticker = ticker.upper()
         company = self.company_repository.get_by_ticker(normalized_ticker)
         if company is None:
             raise CompanyNotFoundError(f"Ticker {normalized_ticker} was not found in the database")
-        document = self.document_repository.get_latest_for_period(company.id, year, quarter)
-        if document is None:
+        documents = self.document_repository.list_by_period(company.id, reporting_year, reporting_quarter)
+        if not documents:
             raise DocumentNotFoundError(
-                f"Filing for {normalized_ticker} in {year} Q{quarter} was not found in the database"
+                f"Filing for {normalized_ticker} reported in {reporting_year} Q{reporting_quarter} "
+                "was not found in the database"
             )
+        return DocumentChunkImportResult(
+            normalized_ticker,
+            reporting_year,
+            reporting_quarter,
+            [self._import_document(document, force) for document in documents],
+        )
 
+    def _import_document(self, document: Document, force: bool) -> ImportedChunks:
+        """Chunk, embed and persist the stored markdown of one filing.
+
+        Args:
+            document: The stored filing.
+            force: Whether to replace chunks that already exist.
+
+        Returns:
+            The filing's type, the number of stored chunks, and what was done.
+
+        Raises:
+            FilingContentNotFoundError: If the stored markdown of the filing is missing.
+            EmbeddingDimensionError: If the embedder returns vectors of the wrong dimension.
+        """
         existing_count = self.chunk_repository.count_by_document_id(document.id)
         if existing_count and not force:
-            return DocumentChunkImportResult(normalized_ticker, year, quarter, existing_count, SKIPPED_STATUS)
+            return ImportedChunks(document.document_type, document.period_type, existing_count, SKIPPED_STATUS)
 
-        blob_name = filing_blob_name(company.ticker, document.year, document.quarter)
+        blob_name = document.raw_document_path
         try:
             markdown = self.storage.read_text(blob_name)
         except FileNotFoundError as error:
@@ -130,7 +163,7 @@ class DocumentChunkImportService:
         self.chunk_repository.create_many(chunk_dtos)
 
         status = REPLACED_STATUS if existing_count else CREATED_STATUS
-        return DocumentChunkImportResult(normalized_ticker, year, quarter, len(chunk_dtos), status)
+        return ImportedChunks(document.document_type, document.period_type, len(chunk_dtos), status)
 
     def _embed(self, contents: list[str]) -> list[list[float]]:
         """Embed chunk contents in one batched call and validate their dimension.

@@ -1,13 +1,14 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from time import sleep
 
-import polars as pl
-from edgar import Company, set_identity
+import pandas as pd
+from edgar import Company, Filing, set_identity
 
-from financial_data_agent.constants import SEC_IDENTITY
+from financial_data_agent.constants import ANNUAL_FORMS, SEC_IDENTITY
 from financial_data_agent.ingestion.paths import filing_blob_name
 from financial_data_agent.ingestion.storage import (
     DataStorage,
@@ -29,6 +30,27 @@ def parse_quarters(raw_quarters: list[str]) -> list[int]:
     for value in raw_quarters:
         quarters.extend(int(part) for part in value.split(",") if part)
     return quarters
+
+
+@dataclass(frozen=True, slots=True)
+class FetchedFiling:
+    """A saved SEC filing and whether it reports on a quarter or a full year."""
+
+    location: str
+    filing: Filing
+    period_type: str
+
+
+def period_type_of(form: str) -> str:
+    """Classify an SEC form as a quarterly or an annual report.
+
+    Args:
+        form: SEC form type, such as "10-Q" or "10-K".
+
+    Returns:
+        "annual" for a 10-K, otherwise "quarterly".
+    """
+    return "annual" if form in ANNUAL_FORMS else "quarterly"
 
 
 class FilingsFetcher:
@@ -57,17 +79,17 @@ class FilingsFetcher:
         self.retry_delay_seconds = retry_delay_seconds
         self.storage = storage or build_data_storage(self.data_dir)
 
-    def fetch_filing(self, ticker: str, form: list[str], quarter: int, year: int) -> tuple[str, object]:
-        """Fetch an SEC filing and save it to the configured storage backend.
+    def fetch_filings(self, ticker: str, form: list[str], quarter: int, year: int) -> list[FetchedFiling]:
+        """Fetch the SEC filings reported in a calendar quarter and save them to the configured storage backend.
 
         Args:
             ticker: Public company ticker symbol.
             form: SEC filing forms, such as ["10-Q", "10-K"].
-            quarter: Calendar quarter, from 1 to 4.
-            year: Filing year.
+            quarter: Calendar quarter the filings were reported in, from 1 to 4.
+            year: Calendar year the filings were reported in.
 
         Returns:
-            A tuple containing the filing location, a disk path or blob name, and the filing.
+            Every matching filing with its location and period type.
 
         Raises:
             ValueError: If quarter is outside the range 1 to 4 or no filing is found.
@@ -83,9 +105,7 @@ class FilingsFetcher:
                 if not filings:
                     raise ValueError(f"No {form} filing found for {ticker.upper()} in {year} Q{quarter}")
 
-                filing = filings[0]
-                location = self.storage.save_text(filing_blob_name(ticker, year, quarter), filing.markdown())
-                return location, filing
+                return [self._save_filing(ticker, filing, year, quarter) for filing in filings]
             except TimeoutError as error:
                 last_error = error
             except Exception as error:
@@ -103,6 +123,22 @@ class FilingsFetcher:
             ) from last_error
 
         raise TimeoutError(f"Timed out fetching {form} for {ticker.upper()}")
+
+    def _save_filing(self, ticker: str, filing: Filing, year: int, quarter: int) -> FetchedFiling:
+        """Save the markdown of a filing under its reporting period and period type.
+
+        Args:
+            ticker: Public company ticker symbol.
+            filing: The SEC filing.
+            year: Calendar year the filing was reported in.
+            quarter: Calendar quarter the filing was reported in.
+
+        Returns:
+            The filing with its storage location and period type.
+        """
+        period_type = period_type_of(filing.form)
+        location = self.storage.save_text(filing_blob_name(ticker, year, quarter, period_type), filing.markdown())
+        return FetchedFiling(location, filing, period_type)
 
 
 class FilingsBackfillRunner:
@@ -136,10 +172,10 @@ class FilingsBackfillRunner:
         """
         symbols: list[str] = []
         for parquet_file in sorted(self.data_dir.glob("*.parquet")):
-            frame = pl.read_parquet(parquet_file)
+            frame = pd.read_parquet(parquet_file)
             if "Symbol" not in frame.columns:
                 continue
-            symbols.extend(frame.get_column("Symbol").drop_nulls().cast(pl.Utf8).to_list())
+            symbols.extend(frame["Symbol"].dropna().astype(str).tolist())
         return symbols
 
     def run(
@@ -172,7 +208,7 @@ class FilingsBackfillRunner:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_symbol = {
                 executor.submit(
-                    self.fetcher.fetch_filing,
+                    self.fetcher.fetch_filings,
                     symbol,
                     ["10-Q", "10-K"],
                     resolved_quarter,
@@ -183,8 +219,7 @@ class FilingsBackfillRunner:
             for future in as_completed(future_to_symbol):
                 symbol = future_to_symbol[future]
                 try:
-                    file_path, _ = future.result()
-                    downloaded_paths.append(file_path)
+                    downloaded_paths.extend(fetched.location for fetched in future.result())
                 except Exception as error:
                     failures.append((symbol, str(error)))
         return downloaded_paths, failures

@@ -34,7 +34,8 @@ def render_docs(chunks: Sequence[RetrievedChunk]) -> str:
     if not chunks:
         return "No passages found."
     return "\n\n".join(
-        f"[{chunk.ticker} {chunk.year} Q{chunk.quarter} | {chunk.heading_path or 'no heading'}]\n{chunk.content}"
+        f"[{chunk.ticker} {chunk.reporting_year} Q{chunk.reporting_quarter} {chunk.period_type} | "
+        f"{chunk.heading_path or 'no heading'}]\n{chunk.content}"
         for chunk in chunks
     )
 
@@ -77,7 +78,11 @@ def find_missing(
     if result is not None and result.rows:
         return []
 
-    found = {(chunk.ticker, chunk.year, chunk.quarter) for chunk in candidates}
+    found = {
+        (chunk.ticker, chunk.reporting_year, chunk.reporting_quarter)
+        for chunk in candidates
+        if chunk.period_type == "quarterly"
+    }
     return [
         MissingFiling(ticker, year, quarter)
         for ticker, year, quarter in product(current.tickers, current.years, current.quarters)
@@ -108,8 +113,9 @@ def intermediate_answer(state: TableRAGState, model: BaseChatModel) -> dict[str,
     citations = [
         Citation(
             chunk.ticker,
-            chunk.year,
-            chunk.quarter,
+            chunk.reporting_year,
+            chunk.reporting_quarter,
+            chunk.period_type,
             chunk.accession_number,
             chunk.chunk_index,
             chunk.heading_path,

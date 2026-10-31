@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-import polars as pl
 from sqlalchemy.orm import Session
 
 from financial_data_agent.db.DTO.company import CompanyDTO
@@ -104,7 +103,7 @@ class CompanyImportService:
         frame = self.fetcher.fetch(save_parquet=True)
         created = 0
         updated = 0
-        for row in frame.to_dicts():
+        for row in frame.to_dict("records"):
             if not isinstance(row, dict):
                 continue
             company_dto = _row_to_company_dto(row)
@@ -134,10 +133,10 @@ class CompanyImportService:
         """
         normalized_ticker = ticker.upper()
         frame = self.fetcher.fetch(save_parquet=False)
-        matches = frame.filter(pl.col("Symbol") == normalized_ticker)
-        if matches.is_empty():
+        matches = frame[frame["Symbol"] == normalized_ticker]
+        if matches.empty:
             raise CompanyNotFoundError(f"Ticker {normalized_ticker} was not found in the S&P 500 table")
-        company_dto = _row_to_company_dto(matches.to_dicts()[0])
+        company_dto = _row_to_company_dto(matches.to_dict("records")[0])
         if not company_dto.ticker or not company_dto.name:
             raise CompanyMappingError(f"Ticker {normalized_ticker} could not be mapped to a company record")
         existing_company = self.repository.get_by_ticker(company_dto.ticker)

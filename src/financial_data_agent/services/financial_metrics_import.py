@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from financial_data_agent.constants import METRIC_FIELDS
 from financial_data_agent.db.DTO.financial_metric import FinancialMetricDTO
+from financial_data_agent.db.models.document import Document
 from financial_data_agent.db.repositories.company import CompanyRepository
 from financial_data_agent.db.repositories.document import DocumentRepository
 from financial_data_agent.db.repositories.financial_metric import FinancialMetricRepository
@@ -22,13 +23,22 @@ class MetricsExtractionError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class ImportedMetrics:
+    """The metrics import outcome of one filing."""
+
+    document_type: str
+    period_type: str
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
 class FinancialMetricsImportResult:
     """Outcome of a financial metrics import."""
 
     ticker: str
-    year: int
-    quarter: int
-    status: str
+    reporting_year: int
+    reporting_quarter: int
+    filings: list[ImportedMetrics]
 
 
 class FinancialMetricsImportService:
@@ -46,16 +56,17 @@ class FinancialMetricsImportService:
         self.metric_repository = FinancialMetricRepository(session)
         self.fetcher = fetcher or FinancialMetricsFetcher()
 
-    def import_metrics(self, ticker: str, year: int, quarter: int) -> FinancialMetricsImportResult:
-        """Extract and persist the financial metrics of a stored filing.
+    def import_metrics(self, ticker: str, reporting_year: int, reporting_quarter: int) -> FinancialMetricsImportResult:
+        """Extract and persist the financial metrics of the stored filings reported in a calendar quarter.
 
         Args:
             ticker: Ticker symbol of the company.
-            year: Filing year.
-            quarter: Calendar quarter, from 1 to 4.
+            reporting_year: Calendar year the filings were reported in.
+            reporting_quarter: Calendar quarter the filings were reported in, from 1 to 4.
 
         Returns:
-            The normalized ticker, period, and whether the metrics were created or updated.
+            The normalized ticker, the reporting period, and each filing with its period type and whether its
+            metrics were created or updated.
 
         Raises:
             CompanyNotFoundError: If the company does not exist in the database.
@@ -66,21 +77,39 @@ class FinancialMetricsImportService:
         company = self.company_repository.get_by_ticker(normalized_ticker)
         if company is None:
             raise CompanyNotFoundError(f"Ticker {normalized_ticker} was not found in the database")
-        document = self.document_repository.get_latest_for_period(company.id, year, quarter)
-        if document is None:
+        documents = self.document_repository.list_by_period(company.id, reporting_year, reporting_quarter)
+        if not documents:
             raise DocumentNotFoundError(
-                f"Filing for {normalized_ticker} in {year} Q{quarter} was not found in the database"
+                f"Filing for {normalized_ticker} reported in {reporting_year} Q{reporting_quarter} "
+                "was not found in the database"
             )
+        return FinancialMetricsImportResult(
+            normalized_ticker,
+            reporting_year,
+            reporting_quarter,
+            [self._import_document(document) for document in documents],
+        )
+
+    def _import_document(self, document: Document) -> ImportedMetrics:
+        """Extract and persist the financial metrics of one stored filing.
+
+        Args:
+            document: The stored filing.
+
+        Returns:
+            The filing's type and whether its metrics were created or updated.
+
+        Raises:
+            MetricsExtractionError: If the SEC filing or its financial data is unavailable.
+        """
         try:
             metrics = self.fetcher.fetch_metrics(document.accession_number)
         except ValueError as error:
             raise MetricsExtractionError(str(error)) from error
         metric_dto = FinancialMetricDTO(
             document_id=document.id,
-            period=f"Q{document.quarter}",
-            year=document.year,
             **{field: metrics.get(field) for field in METRIC_FIELDS},
-            supplied_fields=frozenset({"document_id", "period", "year", *METRIC_FIELDS}),
+            supplied_fields=frozenset({"document_id", *METRIC_FIELDS}),
         )
         existing_metric = self.metric_repository.get_by_document_id(document.id)
         if existing_metric is None:
@@ -89,4 +118,4 @@ class FinancialMetricsImportService:
         else:
             self.metric_repository.update(existing_metric, metric_dto)
             status = "updated"
-        return FinancialMetricsImportResult(normalized_ticker, year, quarter, status)
+        return ImportedMetrics(document.document_type, document.period_type, status)

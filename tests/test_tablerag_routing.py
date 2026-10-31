@@ -17,8 +17,9 @@ def make_chunk(is_table: bool) -> RetrievedChunk:
         heading_path=None,
         chunk_index=0,
         ticker="AAPL",
-        year=2024,
-        quarter=3,
+        reporting_year=2024,
+        reporting_quarter=3,
+        period_type="quarterly",
         accession_number="0000320193-24-000081",
     )
 

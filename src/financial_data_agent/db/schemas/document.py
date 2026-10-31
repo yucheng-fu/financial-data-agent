@@ -11,8 +11,9 @@ class DocumentBase(BaseModel):
     company_id: int
     accession_number: str
     document_type: str
-    year: int
-    quarter: int
+    reporting_year: int
+    reporting_quarter: int
+    period_type: str
     filing_date: date
     period_of_report: date
     raw_document_path: str
@@ -28,8 +29,9 @@ class DocumentUpdate(BaseModel):
     company_id: int | None = None
     accession_number: str | None = None
     document_type: str | None = None
-    year: int | None = None
-    quarter: int | None = None
+    reporting_year: int | None = None
+    reporting_quarter: int | None = None
+    period_type: str | None = None
     filing_date: date | None = None
     period_of_report: date | None = None
     raw_document_path: str | None = None

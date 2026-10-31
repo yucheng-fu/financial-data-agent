@@ -25,8 +25,9 @@ class Citation:
     """A chunk an intermediate answer was based on."""
 
     ticker: str
-    year: int
-    quarter: int
+    reporting_year: int
+    reporting_quarter: int
+    period_type: str
     accession_number: str
     chunk_index: int
     heading_path: str | None

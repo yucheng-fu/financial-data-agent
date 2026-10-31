@@ -3,9 +3,10 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, ForeignKey, String, Text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from financial_data_agent.constants import PERIOD_TYPES
 from financial_data_agent.db.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
@@ -16,6 +17,12 @@ if TYPE_CHECKING:
 
 class Document(TimestampMixin, Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        CheckConstraint(
+            "period_type IN (" + ", ".join(f"'{period_type}'" for period_type in PERIOD_TYPES) + ")",
+            name="ck_documents_period_type",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
@@ -34,11 +41,16 @@ class Document(TimestampMixin, Base):
         nullable=False,
     )
 
-    year: Mapped[int] = mapped_column(
+    reporting_year: Mapped[int] = mapped_column(
         nullable=False,
     )
 
-    quarter: Mapped[int] = mapped_column(
+    reporting_quarter: Mapped[int] = mapped_column(
+        nullable=False,
+    )
+
+    period_type: Mapped[str] = mapped_column(
+        String(10),
         nullable=False,
     )
 

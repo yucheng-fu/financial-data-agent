@@ -25,8 +25,8 @@ def retrieve_chunks(
         embedder: Embedding backend; must be the one the corpus was embedded with.
         query: Natural-language query.
         tickers: Tickers to restrict to, or empty for all.
-        years: Fiscal years to restrict to, or empty for all.
-        quarters: Fiscal quarters to restrict to, or empty for all.
+        years: Reporting years to restrict to, or empty for all.
+        quarters: Reporting quarters to restrict to, or empty for all. A quarter restricts to quarterly filings.
         limit: Maximum number of chunks to return.
 
     Returns:

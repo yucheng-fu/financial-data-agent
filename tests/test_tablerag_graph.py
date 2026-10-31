@@ -32,8 +32,9 @@ TABLE_CHUNK = RetrievedChunk(
     heading_path="Item 1. Financial Statements",
     chunk_index=4,
     ticker="AAPL",
-    year=2024,
-    quarter=3,
+    reporting_year=2024,
+    reporting_quarter=3,
+    period_type="quarterly",
     accession_number=ACCESSION_NUMBER,
 )
 TEXT_CHUNK = RetrievedChunk(
@@ -42,8 +43,9 @@ TEXT_CHUNK = RetrievedChunk(
     heading_path="Item 5. Other Information",
     chunk_index=9,
     ticker="AAPL",
-    year=2024,
-    quarter=3,
+    reporting_year=2024,
+    reporting_quarter=3,
+    period_type="quarterly",
     accession_number=ACCESSION_NUMBER,
 )
 
@@ -104,7 +106,9 @@ def test_tablerag_graph_visits_sql_when_table_chunk_retrieved(monkeypatch: pytes
     assert visited == ["decompose", "retrieve", "rerank", "sql", "intermediate_answer", "decompose"]
     assert final["answer"] == "Apple's revenue in Q3 2024 was 94,930 million USD."
     assert final["sql_result"] == SQLQueryResult(columns=["ticker"], rows=[("AAPL",)], truncated=False)
-    assert final["citations"] == [Citation("AAPL", 2024, 3, ACCESSION_NUMBER, 4, "Item 1. Financial Statements")]
+    assert final["citations"] == [
+        Citation("AAPL", 2024, 3, "quarterly", ACCESSION_NUMBER, 4, "Item 1. Financial Statements")
+    ]
     assert final["missing"] == []
 
 

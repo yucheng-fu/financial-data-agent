@@ -114,13 +114,13 @@ Python functions are limited to 500 MB uncompressed. Measured from the Linux whe
 | All runtime dependencies | ~200 MB | ~600–700 MB |
 | Chat path only (no ingestion) | ~67 MB | ~200 MB, plus ~67 MB model in `/tmp` |
 
-The largest packages are `polars-runtime` (57 MB), `pyarrow` (50 MB, via `edgartools`) and `onnxruntime` (24 MB). Only the ingestion routes need polars and pyarrow.
+The largest packages are `pyarrow` (50 MB, via `edgartools`) and `onnxruntime` (24 MB). Only the ingestion routes need pyarrow.
 
 The whole app is deployed anyway, using Vercel's **Large Functions** beta, which allows bundles up to 5 GB on Fluid compute. Terraform sets `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` on the project to opt in explicitly. `.vercelignore` keeps `data/`, `docs/`, `papers/`, `graphify-out/`, `iac/` and `tests/` out of the upload.
 
 If Large Functions is withdrawn or refused on Hobby:
 
-1. Move `edgartools`, `polars` and `langchain-text-splitters` into a uv dependency group. Vercel installs only `[project].dependencies`.
+1. Move `edgartools` and `langchain-text-splitters` into a uv dependency group. Vercel installs only `[project].dependencies`.
 2. Point `[tool.vercel] entrypoint` at an app that registers only the chat and health routers.
 3. Run imports locally with `uv run fastapi dev` against the deployed environment's variables.
 
@@ -129,7 +129,7 @@ The chat route imports none of the ingestion-only packages, so this split needs 
 ## 7. Known limits
 
 - **300 s per request** on Hobby. A single filing import fits; the bulk backfill in `ingestion/filings.py` stays a local command.
-- **Cold starts** import polars, pyarrow and edgartools, because `api/main.py` registers every router, and they download the embedding model. Expect several seconds on the first request to a new instance.
+- **Cold starts** import pandas, pyarrow and edgartools, because `api/main.py` registers every router, and they download the embedding model. Expect several seconds on the first request to a new instance.
 - **Pooler connections.** Each function instance keeps its own SQLAlchemy pool on the session pooler, whose pool size is small on the free tier. If concurrent instances exhaust it, move the app's URL to the transaction pooler (port 6543) with psycopg's `prepare_threshold=None`; Alembic must stay on the session pooler.
 - **Hobby is for non-commercial use** under Vercel's terms.
 - **Free Supabase projects pause** after 7 days of inactivity, which fails both the migration job and the app.

@@ -3,7 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 from types import SimpleNamespace
 
-import polars as pl
+import pandas as pd
 import pytest
 
 from financial_data_agent.constants import SP500_PARQUET_NAME
@@ -42,8 +42,7 @@ def test_fetch_keeps_leading_zeros_in_cik(monkeypatch: pytest.MonkeyPatch) -> No
 
     frame = SP500Fetcher(storage=FakeDataStorage()).fetch(save_parquet=False)
 
-    assert frame.schema["CIK"] == pl.String
-    assert frame["CIK"].to_list() == ["0000320193", "0000789019"]
+    assert frame["CIK"].tolist() == ["0000320193", "0000789019"]
 
 
 def test_fetch_saves_the_parquet_through_the_injected_storage(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -54,8 +53,8 @@ def test_fetch_saves_the_parquet_through_the_injected_storage(monkeypatch: pytes
     frame = SP500Fetcher(storage=storage).fetch(save_parquet=True)
 
     assert [blob_name for blob_name, _ in storage.saved] == [SP500_PARQUET_NAME]
-    saved_frame = pl.read_parquet(BytesIO(storage.saved[0][1]))
-    assert saved_frame.equals(frame)
+    saved_frame = pd.read_parquet(BytesIO(storage.saved[0][1]))
+    pd.testing.assert_frame_equal(saved_frame, frame)
 
 
 def test_fetch_does_not_save_when_save_parquet_is_false(monkeypatch: pytest.MonkeyPatch) -> None:

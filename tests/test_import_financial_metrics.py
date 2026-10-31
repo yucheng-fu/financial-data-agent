@@ -21,7 +21,7 @@ from financial_data_agent.db.repositories.document import DocumentRepository
 from financial_data_agent.db.repositories.financial_metric import FinancialMetricRepository
 from financial_data_agent.ingestion.financial_metrics import FinancialMetricsFetcher
 
-REQUEST = {"ticker": "aapl", "year": 2026, "quarter": 2}
+REQUEST = {"ticker": "aapl", "reporting_year": 2026, "reporting_quarter": 2}
 
 
 def make_metrics(**overrides: Decimal | None) -> dict[str, Decimal | None]:
@@ -70,8 +70,9 @@ def add_document(session: Session, company_id: int) -> int:
                 company_id=company_id,
                 accession_number="0000320193-26-000001",
                 document_type="10-Q",
-                year=2026,
-                quarter=2,
+                reporting_year=2026,
+                reporting_quarter=2,
+                period_type="quarterly",
                 filing_date=date(2026, 5, 1),
                 period_of_report=date(2026, 3, 31),
                 raw_document_path="data/AAPL_2026_Q2.md",
@@ -87,12 +88,15 @@ def test_import_financial_metrics_creates_metrics_for_stored_filing(session: Ses
     response = TestClient(app).post("/api/v1/financial-metrics/import", json=REQUEST)
 
     assert response.status_code == 200
-    assert response.json() == {"ticker": "AAPL", "year": 2026, "quarter": 2, "status": "created"}
+    assert response.json() == {
+        "ticker": "AAPL",
+        "reporting_year": 2026,
+        "reporting_quarter": 2,
+        "filings": [{"document_type": "10-Q", "period_type": "quarterly", "status": "created"}],
+    }
     assert fetcher_calls == ["0000320193-26-000001"]
     metric = FinancialMetricRepository(session).get_by_document_id(document_id)
     assert metric is not None
-    assert metric.period == "Q2"
-    assert metric.year == 2026
     assert metric.revenue == Decimal("1000")
     assert metric.debt_to_assets_ratio == Decimal("14000")
 
@@ -104,8 +108,8 @@ def test_import_financial_metrics_updates_existing_metrics(session: Session, fet
     first = client.post("/api/v1/financial-metrics/import", json=REQUEST)
     second = client.post("/api/v1/financial-metrics/import", json=REQUEST)
 
-    assert first.json()["status"] == "created"
-    assert second.json()["status"] == "updated"
+    assert first.json()["filings"][0]["status"] == "created"
+    assert second.json()["filings"][0]["status"] == "updated"
     assert len(FinancialMetricRepository(session).list()) == 1
 
 
@@ -123,7 +127,7 @@ def test_import_financial_metrics_rejects_missing_filing(session: Session, fetch
     response = TestClient(app).post("/api/v1/financial-metrics/import", json=REQUEST)
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Filing for AAPL in 2026 Q2 was not found in the database"
+    assert response.json()["detail"] == "Filing for AAPL reported in 2026 Q2 was not found in the database"
     assert fetcher_calls == []
     assert FinancialMetricRepository(session).list() == []
 
@@ -166,7 +170,42 @@ def test_import_financial_metrics_rejects_unavailable_sec_filing(
 
 def test_import_financial_metrics_rejects_invalid_quarter() -> None:
     response = TestClient(app).post(
-        "/api/v1/financial-metrics/import", json={"ticker": "AAPL", "year": 2026, "quarter": 5}
+        "/api/v1/financial-metrics/import", json={"ticker": "AAPL", "reporting_year": 2026, "reporting_quarter": 5}
     )
 
     assert response.status_code == 422
+
+
+def test_import_financial_metrics_imports_every_filing_reported_in_the_quarter(
+    session: Session, fetcher_calls: list[str]
+) -> None:
+    company_id = add_company(session)
+    quarter_id = add_document(session, company_id)
+    annual_id = (
+        DocumentRepository(session)
+        .create(
+            DocumentDTO(
+                company_id=company_id,
+                accession_number="0000320193-26-000009",
+                document_type="10-K",
+                reporting_year=2026,
+                reporting_quarter=2,
+                period_type="annual",
+                filing_date=date(2026, 5, 1),
+                period_of_report=date(2025, 12, 31),
+                raw_document_path="data/AAPL_2026_Q2_annual.md",
+            )
+        )
+        .id
+    )
+
+    response = TestClient(app).post("/api/v1/financial-metrics/import", json=REQUEST)
+
+    assert [(item["document_type"], item["period_type"]) for item in response.json()["filings"]] == [
+        ("10-Q", "quarterly"),
+        ("10-K", "annual"),
+    ]
+    assert fetcher_calls == ["0000320193-26-000001", "0000320193-26-000009"]
+    repository = FinancialMetricRepository(session)
+    assert repository.get_by_document_id(quarter_id) is not None
+    assert repository.get_by_document_id(annual_id) is not None
