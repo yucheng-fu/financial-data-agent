@@ -110,3 +110,24 @@ Fiscal years are deliberately not stored. They differ between companies (NVDA en
 Each company files a 10-K and three 10-Qs a year, and the deadlines mean they normally fall in different calendar quarters, so `(company, reporting_year, reporting_quarter)` identifies one filing. It is not enforced: a small filer with an October or January year-end can file both in one quarter, and the import endpoints then process every filing found. An annual filing's income and cash flow figures cover a whole fiscal year, so queries must filter on `period_type` and never add or average annual and quarterly rows. "Q1 2020" means filings made in January to March 2020, not the quarter ending in March. The agent is told to place every period by `reporting_year` and `reporting_quarter` and never by `period_of_report`, matching how filings are fetched from SEC; the rule is in `SCHEMA_NOTES` in `agent/schema.py`.
 
 `financial_metrics` has no period of its own; it reaches these columns through `document_id`, so a metric row cannot disagree with its filing. The import endpoints take only the ticker and the reporting year and quarter; `period_type` is read from the stored filing and reported in the response. `POST /filings/import` stores every 10-K and 10-Q reported in the quarter and updates a filing it already stored, matched by accession number. The migration backfills `period_type` from `document_type`, so existing rows need no re-import.
+
+### Annual-only slots
+
+A company's 10-K lands in whichever calendar quarter its fiscal year end puts it (NVDA in Q1, MSFT in Q3), and that slot then holds no 10-Q. A quarter question for it has no `quarterly` row to answer with, and the 10-K alone covers a whole year.
+
+The agent answers with two rows from one query: the `annual` row, labelled as the full fiscal year ended `period_of_report`, and the company's latest earlier `quarterly` row, labelled as the quarter ended on its `period_of_report`. This is the one place `period_of_report` is used, to pick the earlier 10-Q; it never places a question in a year or quarter. If the 10-Q is not stored, the agent acquires the filing from the calendar quarter immediately before the 10-K's slot and repeats the query.
+
+Stored 10-Q values are not uniform: `revenue`, `operating_income` and `net_income` cover the quarter, while `operating_cash_flow`, `capital_expenditures` and `free_cash_flow` are year to date. Point-in-time metrics (assets, liabilities, equity, ratios) get the change between the two rows. Income and cash-flow metrics are shown side by side and never subtracted, because a 10-K minus one 10-Q is not a fiscal Q4. The wording is in `SCHEMA_NOTES` in `agent/schema.py`.
+
+### Fiscal fourth quarter
+
+A question for the change from the previous quarter, or for the isolated quarter, needs a fiscal Q4, which no filing holds. The `get_fourth_quarter` tool (`services/fourth_quarter.py`) derives it deterministically in one call, because the chat step limit leaves room for only a few tool rounds. It takes the slot of the 10-K and uses the three 10-Qs whose `period_of_report` falls within a year before the 10-K's. If fewer than three are stored it imports the three calendar quarters before the 10-K's slot, and it fails if it still does not find exactly three.
+
+| Field group | Fiscal Q4 | Quarter before (Q3) |
+| --- | --- | --- |
+| Income flows (`INCOME_FLOW_FIELDS`) | 10-K minus the three 10-Q quarter values | the 10-Q value |
+| Cash flows (`CASH_FLOW_FIELDS`), 10-Q values are year to date | 10-K minus the latest 10-Q | latest 10-Q minus the 10-Q before |
+| Point in time (`POINT_IN_TIME_FIELDS`) | the 10-K value | the latest 10-Q value |
+| Share counts | null, not additive | null |
+
+Any null input gives a null output. When the previous quarter of a normal 10-Q slot is itself a fiscal Q4, the agent calls the tool for the 10-K's slot and compares its Q4 with the 10-Q; this path is not covered by an end-to-end test.
