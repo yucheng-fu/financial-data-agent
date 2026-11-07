@@ -27,4 +27,23 @@ def test_schema_prompt_ties_quarter_questions_to_quarterly_filings() -> None:
 
     assert "A question about a quarter" in prompt
     assert "period_type = 'quarterly'" in prompt
-    assert "Never answer a quarter question with an annual row" in prompt
+    assert "Never answer a quarter question with an annual row alone" in prompt
+
+
+def test_schema_prompt_answers_annual_only_quarter_slot_with_10k_and_earlier_10q() -> None:
+    prompt = build_schema_prompt()
+
+    assert "full fiscal year ended <period_of_report>" in prompt
+    assert "quarter ended <period_of_report>" in prompt
+    assert "q.period_of_report < k.period_of_report" in prompt
+    assert "never subtract one row from the other" in prompt
+    assert "Never add or average annual and quarterly figures" in prompt
+    assert "say the figure is not in the database" not in prompt
+
+
+def test_schema_prompt_routes_change_questions_to_get_fourth_quarter() -> None:
+    prompt = build_schema_prompt()
+
+    assert "never for a plain" in prompt
+    assert "get_fourth_quarter" in prompt
+    assert "previous_quarter to fourth_quarter" in prompt

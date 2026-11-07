@@ -239,3 +239,155 @@ def test_chat_route_acquires_a_missing_filing_once_then_retries_table_rag(monkey
     assert [step["tool"] for step in body["steps"]] == ["table_rag", "acquire_filing", "table_rag"]
     assert FakeAcquirer.calls == [("MSFT", 2024, 3)]
     assert body["citations"] == [CITATION]
+
+
+ANNUAL_ROW = {
+    "ticker": "NVDA",
+    "reporting_year": 2020,
+    "reporting_quarter": 1,
+    "period_type": "annual",
+    "period_of_report": "2020-01-26",
+    "revenue": "10918000000.00",
+}
+EARLIER_QUARTERLY_ROW = {
+    "ticker": "NVDA",
+    "reporting_year": 2019,
+    "reporting_quarter": 4,
+    "period_type": "quarterly",
+    "period_of_report": "2019-10-27",
+    "revenue": "3014000000.00",
+}
+NVDA_QUESTION = "What is the revenue of NVDA that was reported in 2020 Q1?"
+
+
+def citation_for(row: dict[str, str | int]) -> dict[str, str | int | None]:
+    return {
+        "ticker": row["ticker"],
+        "reporting_year": row["reporting_year"],
+        "reporting_quarter": row["reporting_quarter"],
+        "period_type": row["period_type"],
+        "accession_number": None,
+        "chunk_index": None,
+        "heading_path": None,
+    }
+
+
+def test_chat_route_cites_the_10k_and_the_earlier_10q_for_an_annual_only_quarter_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def query_database(sql: str) -> str:
+        """Run one read-only SQL query.
+
+        Args:
+            sql: The SQL to run.
+
+        Returns:
+            The result rows.
+        """
+        return json.dumps({"rows": [ANNUAL_ROW, EARLIER_QUARTERLY_ROW], "truncated": False, "error": None})
+
+    model = ToolCallingFakeChatModel(
+        messages=iter(
+            [
+                named_call("query_database", {"sql": SQL}, "call-1"),
+                AIMessage(content="Full year $10.918B; quarter ended 2019-10-27 $3.014B.", usage_metadata=usage(10, 2)),
+            ]
+        )
+    )
+    use_fakes(monkeypatch, model)
+    monkeypatch.setattr(chat_route, "query_database", query_database)
+
+    body = TestClient(app).post("/api/v1/chat", json={"message": NVDA_QUESTION}).json()
+
+    assert [step["tool"] for step in body["steps"]] == ["query_database"]
+    assert body["citations"] == [citation_for(ANNUAL_ROW), citation_for(EARLIER_QUARTERLY_ROW)]
+
+
+def test_chat_route_acquires_the_earlier_10q_once_then_retries_the_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    results = iter([[ANNUAL_ROW], [ANNUAL_ROW, EARLIER_QUARTERLY_ROW]])
+
+    def query_database(sql: str) -> str:
+        """Run one read-only SQL query.
+
+        Args:
+            sql: The SQL to run.
+
+        Returns:
+            The result rows.
+        """
+        return json.dumps({"rows": next(results), "truncated": False, "error": None})
+
+    FakeAcquirer.calls = []
+    model = ToolCallingFakeChatModel(
+        messages=iter(
+            [
+                named_call("query_database", {"sql": SQL}, "call-1"),
+                named_call(
+                    "acquire_filing", {"ticker": "NVDA", "reporting_year": 2019, "reporting_quarter": 4}, "call-2"
+                ),
+                named_call("query_database", {"sql": SQL}, "call-3"),
+                AIMessage(content="Full year $10.918B; quarter ended 2019-10-27 $3.014B.", usage_metadata=usage(10, 2)),
+            ]
+        )
+    )
+    use_fakes(monkeypatch, model)
+    monkeypatch.setattr(chat_route, "query_database", query_database)
+    monkeypatch.setattr(chat_route, "FilingAcquirer", FakeAcquirer)
+
+    body = TestClient(app).post("/api/v1/chat", json={"message": NVDA_QUESTION}).json()
+
+    assert [step["tool"] for step in body["steps"]] == ["query_database", "acquire_filing", "query_database"]
+    assert FakeAcquirer.calls == [("NVDA", 2019, 4)]
+    assert body["citations"] == [citation_for(ANNUAL_ROW), citation_for(EARLIER_QUARTERLY_ROW)]
+
+
+def test_chat_route_cites_every_source_filing_of_get_fourth_quarter(monkeypatch: pytest.MonkeyPatch) -> None:
+    sources = [
+        {"ticker": "NVDA", "reporting_year": 2020, "reporting_quarter": 1, "period_type": "annual"},
+        {"ticker": "NVDA", "reporting_year": 2019, "reporting_quarter": 2, "period_type": "quarterly"},
+        {"ticker": "NVDA", "reporting_year": 2019, "reporting_quarter": 3, "period_type": "quarterly"},
+        {"ticker": "NVDA", "reporting_year": 2019, "reporting_quarter": 4, "period_type": "quarterly"},
+    ]
+
+    def get_fourth_quarter(ticker: str, reporting_year: int, reporting_quarter: int) -> str:
+        """Derive the fiscal fourth quarter.
+
+        Args:
+            ticker: Ticker symbol.
+            reporting_year: Calendar year.
+            reporting_quarter: Calendar quarter.
+
+        Returns:
+            The derived quarter as JSON.
+        """
+        return json.dumps(
+            {
+                "ticker": ticker,
+                "fourth_quarter": {"revenue": "3105000000.00"},
+                "previous_quarter": {"revenue": "3014000000.00"},
+                "sources": sources,
+                "error": None,
+            }
+        )
+
+    model = ToolCallingFakeChatModel(
+        messages=iter(
+            [
+                named_call(
+                    "get_fourth_quarter", {"ticker": "NVDA", "reporting_year": 2020, "reporting_quarter": 1}, "call-1"
+                ),
+                AIMessage(content="Revenue rose $91M (+3.0%).", usage_metadata=usage(10, 2)),
+            ]
+        )
+    )
+    use_fakes(monkeypatch, model)
+    monkeypatch.setattr(chat_route, "get_fourth_quarter", get_fourth_quarter)
+
+    body = (
+        TestClient(app)
+        .post("/api/v1/chat", json={"message": "Revenue change in 2020 Q1 from the previous quarter?"})
+        .json()
+    )
+
+    assert [step["tool"] for step in body["steps"]] == ["get_fourth_quarter"]
+    assert body["citations"] == [citation_for(source) for source in sources]
