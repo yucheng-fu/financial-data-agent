@@ -75,6 +75,19 @@ METRIC_FIELDS: tuple[str, ...] = (
     "debt_to_assets_ratio",
 )
 
+INCOME_FLOW_FIELDS: tuple[str, ...] = ("revenue", "operating_income", "net_income")
+CASH_FLOW_FIELDS: tuple[str, ...] = ("operating_cash_flow", "capital_expenditures", "free_cash_flow")
+POINT_IN_TIME_FIELDS: tuple[str, ...] = (
+    "total_assets",
+    "total_liabilities",
+    "stockholders_equity",
+    "current_assets",
+    "current_ratio",
+    "debt_to_assets_ratio",
+)
+FISCAL_YEAR_DAYS = 365
+QUARTERS_PER_FISCAL_YEAR = 3
+
 EDGAR_METRIC_KEYS: dict[str, str] = {
     "revenue": "revenue",
     "operating_income": "operating_income",

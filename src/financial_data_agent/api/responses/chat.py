@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -66,6 +68,21 @@ class AcquireFilingResponse(BaseModel):
     """The outcome of the acquire_filing tool, or the error that stopped the call."""
 
     result: DocumentChunkImportResponse | None = None
+    error: str | None = None
+
+
+class FourthQuarterResponse(BaseModel):
+    """The derived fiscal fourth quarter and the quarter before it, or the error that stopped the call.
+
+    `fourth_quarter` and `previous_quarter` hold single-quarter figures; `sources` are the filings behind them.
+    """
+
+    ticker: str | None = None
+    fiscal_year_end: date | None = None
+    previous_quarter_end: date | None = None
+    fourth_quarter: dict[str, Decimal | None] | None = None
+    previous_quarter: dict[str, Decimal | None] | None = None
+    sources: list[CitationResponse] = []
     error: str | None = None
 
 
