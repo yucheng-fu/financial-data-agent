@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Sequence
 from itertools import count
 from typing import Any
@@ -70,6 +71,7 @@ def test_chat_route_returns_answer_and_sql_step(monkeypatch: pytest.MonkeyPatch)
     assert response.status_code == 200
     assert response.json() == {
         "answer": "There are 503 companies.",
+        "citations": [],
         "steps": [{"tool": "query_database", "arguments": {"sql": SQL}, "result": RESULT}],
         "usage": {"input_tokens": 250, "output_tokens": 28},
     }
@@ -93,7 +95,6 @@ def test_chat_route_reports_unknown_tool_call_as_step_error(monkeypatch: pytest.
 
     assert response.status_code == 200
     result = response.json()["steps"][0]["result"]
-    assert result["rows"] == []
     assert result["error"].startswith("Error: drop_tables is not a valid tool")
 
 
@@ -108,3 +109,133 @@ def test_chat_route_returns_422_when_step_limit_is_hit(monkeypatch: pytest.Monke
     assert detail["steps"]
     assert detail["steps"][0] == {"tool": "query_database", "arguments": {"sql": SQL}, "result": RESULT}
     assert detail["usage"] == {"input_tokens": 100 * len(detail["steps"]), "output_tokens": 20 * len(detail["steps"])}
+
+
+FILING_ROW = {
+    "ticker": "NVDA",
+    "reporting_year": 2020,
+    "reporting_quarter": 2,
+    "period_type": "quarterly",
+    "accession_number": "0001045810-20-000010",
+    "revenue": "3080000000.00",
+}
+
+
+def test_chat_route_cites_the_filing_behind_a_metric_row_without_accession_number(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    row = {key: value for key, value in FILING_ROW.items() if key != "accession_number"}
+
+    def query_database(sql: str) -> str:
+        """Run one read-only SQL query.
+
+        Args:
+            sql: The SQL to run.
+
+        Returns:
+            The result rows.
+        """
+        return json.dumps({"rows": [row], "truncated": False, "error": None})
+
+    model = ToolCallingFakeChatModel(
+        messages=iter([tool_call_message(), AIMessage(content="$3.08B.", usage_metadata=usage(10, 2))])
+    )
+    use_fakes(monkeypatch, model)
+    monkeypatch.setattr(chat_route, "query_database", query_database)
+
+    body = TestClient(app).post("/api/v1/chat", json={"message": "NVDA revenue?"}).json()
+
+    assert body["citations"] == [
+        {
+            "ticker": "NVDA",
+            "reporting_year": 2020,
+            "reporting_quarter": 2,
+            "period_type": "quarterly",
+            "accession_number": None,
+            "chunk_index": None,
+            "heading_path": None,
+        }
+    ]
+
+
+QUESTION = "Compare Apple and Microsoft revenue in Q3 2024."
+CITATION = {
+    "ticker": "AAPL",
+    "reporting_year": 2024,
+    "reporting_quarter": 3,
+    "period_type": "quarterly",
+    "accession_number": "0000320193-24-000081",
+    "chunk_index": 7,
+    "heading_path": None,
+}
+
+
+class FakeAcquirer:
+    calls: list[tuple[str, int, int]] = []
+
+    def acquire_filing(self, ticker: str, reporting_year: int, reporting_quarter: int) -> str:
+        """Download a filing.
+
+        Args:
+            ticker: Ticker symbol.
+            reporting_year: Calendar year.
+            reporting_quarter: Calendar quarter.
+
+        Returns:
+            The outcome as JSON.
+        """
+        self.calls.append((ticker, reporting_year, reporting_quarter))
+        return json.dumps({"result": None, "error": None})
+
+
+def named_call(tool: str, args: dict[str, Any], call_id: str) -> AIMessage:
+    return AIMessage(content="", tool_calls=[{"name": tool, "args": args, "id": call_id}], usage_metadata=usage(10, 2))
+
+
+def test_chat_route_acquires_a_missing_filing_once_then_retries_table_rag(monkeypatch: pytest.MonkeyPatch) -> None:
+    answers = iter(
+        [
+            {
+                "answer": "Only Apple found.",
+                "citations": [CITATION],
+                "missing": [{"ticker": "MSFT", "year": 2024, "quarter": 3}],
+            },
+            {"answer": "Apple led.", "citations": [CITATION], "missing": []},
+        ]
+    )
+
+    def table_rag(question: str) -> str:
+        """Answer from the filings.
+
+        Args:
+            question: The question.
+
+        Returns:
+            The answer as JSON.
+        """
+        return json.dumps({"error": None, **next(answers)})
+
+    FakeAcquirer.calls = []
+    model = ToolCallingFakeChatModel(
+        messages=iter(
+            [
+                named_call("table_rag", {"question": QUESTION}, "call-1"),
+                named_call(
+                    "acquire_filing", {"ticker": "MSFT", "reporting_year": 2024, "reporting_quarter": 3}, "call-2"
+                ),
+                named_call("table_rag", {"question": QUESTION}, "call-3"),
+                AIMessage(content="Apple led.", usage_metadata=usage(10, 2)),
+            ]
+        )
+    )
+    use_fakes(monkeypatch, model)
+    monkeypatch.setattr(chat_route, "table_rag", table_rag)
+    monkeypatch.setattr(chat_route, "FilingAcquirer", FakeAcquirer)
+
+    response = TestClient(app).post("/api/v1/chat", json={"message": QUESTION})
+
+    body = response.json()
+    assert response.status_code == 200
+    assert [step["tool"] for step in body["steps"]] == ["table_rag", "acquire_filing", "table_rag"]
+    assert FakeAcquirer.calls == [("MSFT", 2024, 3)]
+    assert body["citations"] == [CITATION]

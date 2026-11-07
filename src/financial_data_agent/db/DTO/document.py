@@ -84,3 +84,14 @@ class DocumentDTO:
             if field in self.supplied_fields:
                 setattr(document, field, getattr(self, field))
         return document
+
+
+@dataclass(frozen=True, slots=True)
+class FilingCoverage:
+    """A stored filing and how many chunks it has."""
+
+    ticker: str
+    reporting_year: int
+    reporting_quarter: int
+    period_type: str
+    chunk_count: int

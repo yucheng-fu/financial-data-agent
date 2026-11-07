@@ -41,6 +41,7 @@ LLM_READER_TABLES: tuple[str, ...] = ("companies", "documents", "financial_metri
 
 CHAT_SQL_ROW_LIMIT = 50
 CHAT_RECURSION_LIMIT = 10
+CHAT_ACQUISITION_LIMIT = 2
 
 CREATED_STATUS = "created"
 REPLACED_STATUS = "replaced"
