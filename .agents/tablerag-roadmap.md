@@ -44,7 +44,7 @@ No module in `agent/`, `services/` or `evaluation/` may import a provider packag
 
 ### Deployment note for the embedding model
 
-`fastembed` downloads the model to a cache directory on first use, defaulting to a temporary directory. That is fine locally but wrong in a container, which would re-download on every cold start and take a network dependency at startup. Phase 13 should bake the model into the image at build time and set `EMBEDDING_CACHE_DIR` to that path.
+`fastembed` downloads the model to a cache directory on first use, defaulting to a temporary directory. That is fine locally but wrong in a container, which would re-download on every cold start and take a network dependency at startup. Phase 14 should bake the model into the image at build time and set `EMBEDDING_CACHE_DIR` to that path.
 
 ## 3. Traps in the existing code
 
@@ -74,24 +74,25 @@ Each phase leaves the repo green under `uv run ruff check . && uv run ruff forma
 | 6 | Chat-to-SQL slice (PoC) | done | `langgraph`, `langchain-google-genai` |
 | 7 | TableRAG scaffolding | done | no |
 | 8 | TableRAG nodes and subgraph | done | no |
-| 9 | Tools and MCP mount | not started | `mcp` |
+| 9 | Tools and MCP mount | tools done, MCP mount pending | `mcp` |
 | 10 | Conversation store | dropped | no |
-| 11 | Client-sent history and the TableRAG tool in chat | not started | no |
+| 11 | TableRAG tool in chat | done | no |
 | 12 | Evaluation harness | not started | no |
-| 13 | Deployed inference and front end | not started | no |
-| 14 | Documentation | not started | no |
+| 13 | Client-sent history | not started | no |
+| 14 | Deployed inference and front end | not started | no |
+| 15 | Documentation | not started | no |
 
-Phases 1–8 are done. Phases 9–14 follow.
+Phases 1–8 and 11 are done. Phases 9 (MCP mount only) and 12–15 follow.
 
 ### Phase 5 — Read-only SQL execution
 
 Done. Migration `4f1a9c3e7b2d` creates the `llm_reader` role (trap 8); `get_llm_reader_engine()` in `db/database.py` logs in as it from `LLM_READER_DATABASE_URL`; `services/sql_query.py` `execute_llm_sql` runs the SQL with `SET LOCAL statement_timeout`, `fetchmany(row_limit + 1)` and `finally: session.rollback()`. No regex guard: the role's grants are the enforcement, and Postgres' `permission denied` is the error the model sees. The permission tests in `tests/test_sql_query.py` need a reachable `LLM_READER_DATABASE_URL` and skip without one, including in CI.
 
-Known gap: the SQL is sent without parameters, so psycopg allows several statements, and `SET statement_timeout = 0; SELECT pg_sleep(...)` overrides the timeout. The pool is capped at two connections, so the damage is bounded; close it in Phase 13 before the endpoint goes public.
+Known gap: the SQL is sent without parameters, so psycopg allows several statements, and `SET statement_timeout = 0; SELECT pg_sleep(...)` overrides the timeout. The pool is capped at two connections, so the damage is bounded; close it in Phase 14 before the endpoint goes public.
 
 ### Phase 6 — Chat-to-SQL slice (PoC)
 
-Done. The thinnest path from a chat message to a database row, built before TableRAG so the end-to-end tunnel is proven first. `POST /api/v1/chat` (`{message}` → `{answer, steps}`, stateless) calls `services/chat.py` `answer_question`, which runs `agent/chat_graph.py` — `agent` ↔ `ToolNode` with `tools_condition`, the agent node a `functools.partial` over the module-level `call_model`, invoked with `recursion_limit` (trap 5). The single tool, `api/tools/query_database.py`, runs `execute_llm_sql` as `llm_reader`, caps output at `CHAT_SQL_ROW_LIMIT = 50` rows and returns database errors as text so the model can correct itself. `agent/schema.py` `build_schema_prompt()` compiles the granted tables' DDL from the models with the postgres dialect — so `"CIK"` comes out quoted (trap 2) — and appends the `documents.quarter` rule (trap 3). Tools are injected by the route, since services may not import `api/`. `create_react_agent` was not used: it is deprecated in favour of `langchain`, which §5 forbids. Gemini 429s are not mapped to an HTTP status yet; that needs care in Phase 13 because importing the provider SDK in a route breaks the seam.
+Done. The thinnest path from a chat message to a database row, built before TableRAG so the end-to-end tunnel is proven first. `POST /api/v1/chat` (`{message}` → `{answer, steps}`, stateless) calls `services/chat.py` `answer_question`, which runs `agent/chat_graph.py` — `agent` ↔ `ToolNode` with `tools_condition`, the agent node a `functools.partial` over the module-level `call_model`, invoked with `recursion_limit` (trap 5). The single tool, `api/tools/query_database.py`, runs `execute_llm_sql` as `llm_reader`, caps output at `CHAT_SQL_ROW_LIMIT = 50` rows and returns database errors as text so the model can correct itself. `agent/schema.py` `build_schema_prompt()` compiles the granted tables' DDL from the models with the postgres dialect — so `"CIK"` comes out quoted (trap 2) — and appends the `documents.quarter` rule (trap 3). Tools are injected by the route, since services may not import `api/`. `create_react_agent` was not used: it is deprecated in favour of `langchain`, which §5 forbids. Gemini 429s are not mapped to an HTTP status yet; that needs care in Phase 14 because importing the provider SDK in a route breaks the seam.
 
 ### Phase 7 — TableRAG scaffolding
 
@@ -110,6 +111,8 @@ Phase 9's `table_rag` wrapper must catch `GraphRecursionError` and `Decompositio
 
 ### Phase 9 — Tools and MCP mount
 
+The three tools are done (built with Phase 11): `api/tools/{table_rag,list_available_filings,acquire_filing}.py`. `acquire_filing` is a bound method of a per-request `FilingAcquirer`, which holds the budget (`CHAT_ACQUISITION_LIMIT`); `table_rag` takes only `question`, since decompose already extracts tickers, years and quarters. Still to do: `mcp_server.py`, the `/mcp` mount with its lifespan and the `MCP_API_KEY` check, and their tests.
+
 `api/tools/` with one module per tool, each a thin wrapper that calls services and translates service exceptions into tool errors. `query_database` exists from Phase 6; add:
 
 - `table_rag(question, tickers?, years?, quarters?)` — builds and invokes the TableRAG subgraph; returns answer, citations, `steps` and `missing`.
@@ -122,21 +125,11 @@ Tests call each tool function directly with fakes patched on the service modules
 
 ### Phase 10 — Conversation store
 
-Dropped: the demo has no login, so history lives in the browser (see Phase 11).
+Dropped: the demo has no login, so history lives in the browser (see Phase 13).
 
-### Phase 11 — Client-sent history and the TableRAG tool in chat
+### Phase 11 — TableRAG tool in chat
 
-Extends Phase 6 rather than building anew. The chat graph is unchanged; the route passes the Phase 9 tools (`table_rag`, `list_available_filings`, `acquire_filing`) alongside `query_database`.
-
-`ChatRequest` becomes `{messages: [{role: "user" | "assistant", content}]}`. Pydantic enforces that the last message is from the user, at most `CHAT_HISTORY_LIMIT` messages and a per-message length cap; anything else is a 422. The response becomes `{answer, citations, steps, usage}`. The route stays sync `def` like every existing route — FastAPI already runs sync routes in a threadpool.
-
-`services/chat.py` — `answer_question(messages, tools)` converts the pairs to `HumanMessage` / `AIMessage` and invokes the graph. It loads and persists nothing.
-
-The client can forge assistant turns. That is acceptable: what the model can do is bounded by `llm_reader`, the acquisition budget and `recursion_limit`, not by trusting history.
-
-Document the concurrency ceiling: a 30–120s run occupies one of anyio's 40 threadpool workers against `max_replicas = 1`, so the answer to throughput later is `202 Accepted` plus a job table, not async/await.
-
-Tests use a `GenericFakeChatModel` subclass that overrides `bind_tools` to return `self` (the stock fake raises), with scripted `AIMessage`s carrying `tool_calls`. Assert a follow-up question is answered from history with no tool call, that a missing filing leads to exactly one `acquire_filing` call, and that an over-limit or assistant-last history returns 422.
+Done. `POST /api/v1/chat` passes `query_database`, `table_rag`, `list_available_filings` and `FilingAcquirer().acquire_filing` to the chat graph and returns `{answer, citations, steps, usage}`; `ChatStepResponse.result` is now the tool's raw JSON object, and `citations` are collected from the `table_rag` steps plus any `query_database` row that selects the filing columns (`ticker`, `reporting_year`, `reporting_quarter`, `period_type`; `accession_number` is kept when selected; the prompt asks for them, so it is best-effort). The system prompt tells the model to call `table_rag` once per question and to acquire only after a result reports a missing filing. `DocumentRepository.list_coverage` backs `list_available_filings`. The concurrency ceiling (a 30–120s run holds one of anyio's 40 threadpool workers against `max_replicas = 1`; the later answer is `202 Accepted` plus a job table, not async/await) goes into `docs/` in Phase 15.
 
 ### Phase 12 — Evaluation harness
 
@@ -150,7 +143,17 @@ Code in `src/financial_data_agent/evaluation/` so ruff, pyrefly and the import p
 - Sized for the free tier: 20 RPD per model allows about four questions a day at five calls each. Keep the dataset to 10–15 questions, mostly metric questions scored without a judge. Runs are sequential (5–10 RPM gains nothing from concurrency), honour `retry-after` on 429, and are resumable — results are stored per question id and completed ids are skipped — so one configuration spans several days. Check in AI Studio whether Gemma 4, listed as free, has higher limits and tool calling; if so it widens the model axis.
 - `compare.py` — a markdown table across runs, refusing to compare runs whose judge model, embedding model or dataset hash differ.
 
-### Phase 13 — Deployed inference and the front end
+### Phase 13 — Client-sent history
+
+Makes chat multi-turn. `ChatRequest` becomes `{messages: [{role: "user" | "assistant", content}]}`. Pydantic enforces that the last message is from the user, at most `CHAT_HISTORY_LIMIT` messages and a per-message length cap; anything else is a 422.
+
+`services/chat.py` — `answer_question(messages, tools)` converts the pairs to `HumanMessage` / `AIMessage` and invokes the graph. It loads and persists nothing.
+
+The client can forge assistant turns. That is acceptable: what the model can do is bounded by `llm_reader`, the acquisition budget and `recursion_limit`, not by trusting history.
+
+Tests reuse the Phase 11 fake model. Assert a follow-up question is answered from history with no tool call, and that an over-limit or assistant-last history returns 422.
+
+### Phase 14 — Deployed inference and the front end
 
 The chat model is Gemini on the model chosen in Phase 12 — no Azure AI Foundry, no Azure OpenAI, no self-hosting. Wire it into the deployed path: `GOOGLE_API_KEY` and `MCP_API_KEY` as Terraform secrets alongside `database-url` in `iac/environments/{test,prod}/main.tf`, following the existing `secrets` / `secret_env_vars` pattern, plus `LLM_MODEL` as a plain `env_var`. The container-app module needs no changes — it already iterates secret names generically. `LLM_READER_DATABASE_URL` is already wired: the `LLM_READER_DB_PASSWORD` environment secret becomes `TF_VAR_llm_reader_db_password`, the Supabase module composes the URL with the pooler username `llm_reader.<project-ref>`, and both the container app and the migrate jobs receive it.
 
@@ -160,7 +163,7 @@ This means the app needs CORS, which it has never had: `CORSMiddleware` in `api/
 
 Confirm before closing the phase: the Container App scales to zero, so the first request after idle pays a *container* cold start even though the inference API does not — decide whether that is acceptable or whether `min_replicas` should be 1. The demo endpoint is public and every request spends the shared 20 RPD, so add a strict per-IP rate limit and map Gemini's 429 to a clear "daily quota used" response. And `/docs` is public too, which is fine but worth a deliberate look before the link goes on a CV.
 
-### Phase 14 — Documentation
+### Phase 15 — Documentation
 
 - `docs/architecture.md` is already rewritten for this design; update it only where implementation diverged.
 - `docs/RAG.md` — why schema retrieval was dropped, how `route_sql` replaces the table-chunk trigger, why acquisition moved to the chat agent and how its budget works, HNSW versus IVFFlat, the read-only SQL threat model and the least-privilege-role recommendation, the `BaseChatModel` seam and how to add a provider, why LangGraph replaced the hand-rolled loop, why the server is stateless and history comes from the client, why embeddings run in process while the chat model is hosted, and the MCP mount with the separate-app alternative stated and rejected.
@@ -184,7 +187,7 @@ Do not add:
 
 Check what telemetry `langchain-google-genai` ships with and disable it explicitly in the Dockerfile `ENV` block — including LangSmith tracing, which `langchain-core` enables from environment variables. Filing text should not leave the container by default.
 
-The Gemini free tier uses prompts to improve Google's products. Filings are public, but user messages are not, so the demo must say so before Phase 13 puts the endpoint in front of other people.
+The Gemini free tier uses prompts to improve Google's products. Filings are public, but user messages are not, so the demo must say so before Phase 14 puts the endpoint in front of other people.
 
 ## 6. Testing notes
 
