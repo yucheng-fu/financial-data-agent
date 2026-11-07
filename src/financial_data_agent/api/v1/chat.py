@@ -9,10 +9,12 @@ from financial_data_agent.api.responses.chat import (
     ChatResponse,
     ChatStepResponse,
     CitationResponse,
+    FourthQuarterResponse,
     TableRAGResponse,
     TokenUsageResponse,
 )
 from financial_data_agent.api.tools.acquire_filing import FilingAcquirer
+from financial_data_agent.api.tools.get_fourth_quarter import get_fourth_quarter
 from financial_data_agent.api.tools.list_available_filings import list_available_filings
 from financial_data_agent.api.tools.query_database import query_database
 from financial_data_agent.api.tools.table_rag import table_rag
@@ -41,7 +43,13 @@ def chat(request: ChatRequest) -> ChatResponse:
     try:
         result = answer_question(
             request.message,
-            tools=[query_database, table_rag, list_available_filings, FilingAcquirer().acquire_filing],
+            tools=[
+                query_database,
+                table_rag,
+                list_available_filings,
+                FilingAcquirer().acquire_filing,
+                get_fourth_quarter,
+            ],
         )
     except ChatStepLimitError as error:
         detail = {
@@ -73,7 +81,7 @@ def to_step_response(step: ChatStep) -> ChatStepResponse:
 
 
 def collect_citations(steps: list[ChatStepResponse]) -> list[CitationResponse]:
-    """Gather the filings cited by table_rag chunks and by query_database rows that name their filing.
+    """Gather the filings cited by table_rag chunks, get_fourth_quarter sources and query_database rows.
 
     Args:
         steps: The tool calls made while answering.
@@ -93,5 +101,11 @@ def collect_citations(steps: list[ChatStepResponse]) -> list[CitationResponse]:
         if step.tool == "query_database"
         for row in step.result.get("rows", [])
         if row.keys() >= CITATION_COLUMNS
+    ]
+    citations += [
+        source
+        for step in steps
+        if step.tool == "get_fourth_quarter"
+        for source in FourthQuarterResponse.model_validate(step.result).sources
     ]
     return list(dict.fromkeys(citations))

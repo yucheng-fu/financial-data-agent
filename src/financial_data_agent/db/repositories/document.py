@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -72,6 +73,32 @@ class DocumentRepository:
         )
         latest_by_accession = {document.accession_number: document for document in self.session.scalars(statement)}
         return list(latest_by_accession.values())
+
+    def list_quarterly_between(self, company_id: int, after: date, before: date) -> list[Document]:
+        """Return the quarterly filings of a company whose period ended strictly between two dates.
+
+        A filing stored more than once is returned once, as its most recently created row.
+
+        Args:
+            company_id: Primary key of the company.
+            after: Exclusive lower bound of `period_of_report`.
+            before: Exclusive upper bound of `period_of_report`.
+
+        Returns:
+            The matching documents ordered by `period_of_report`; empty if there are none.
+        """
+        statement = (
+            select(Document)
+            .where(
+                Document.company_id == company_id,
+                Document.period_type == "quarterly",
+                Document.period_of_report > after,
+                Document.period_of_report < before,
+            )
+            .order_by(Document.period_of_report, Document.id)
+        )
+        latest_by_accession = {document.accession_number: document for document in self.session.scalars(statement)}
+        return sorted(latest_by_accession.values(), key=lambda document: document.period_of_report)
 
     def list_coverage(self, ticker: str | None = None) -> list[FilingCoverage]:
         """Return the stored filings with their chunk counts.

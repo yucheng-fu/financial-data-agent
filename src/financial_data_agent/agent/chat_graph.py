@@ -24,6 +24,11 @@ Tools:
 - list_available_filings: which filings are stored.
 - acquire_filing: download a filing that is not stored. Use it only when a result says the filing is missing,
   at most once per period, and then repeat the earlier tool call.
+- get_fourth_quarter: single-quarter figures of a derived fiscal Q4, only for change or Q4 questions (see the notes).
+If a plain value question returns only a 10-K row, follow the two-row rule in the notes below: run the two-row
+query next, without list_available_filings or table_rag. If the earlier 10-Q is not in the result, call
+acquire_filing once for the calendar quarter before the 10-K's slot (Q1 of year Y: ask for Q4 of Y-1), then repeat
+the two-row query.
 The database holds only the filings imported so far, so a result covering few companies or periods is expected.
 Answer as soon as a result gives you the data you need, and say which companies and periods it covers.
 Do not re-run a call to double-check it. Write PostgreSQL against this schema:
